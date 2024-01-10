@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package chaparral.v1;
+
+import "chaparral/v1/core.proto";
+import "google/protobuf/timestamp.proto";
+
+// AccessService provides endpoints for reading OCFL objects.
+service AccessService {    
+    // GetObjectState returns logical state, and other information for a given
+    // OCFL object version.
+    rpc GetObjectState(GetObjectStateRequest) returns (GetObjectStateResponse) {}
+}
+
+// GetObjectStateRequest is used to request information about an object's state.
+message GetObjectStateRequest{
+    // The storage group id for the object to access. If not set, the default
+    // storage group is used.
+    string group_id = 1;
+    // The storage root id for the object to access. If not set, the default
+    // storage root is used.
+    string storage_root_id = 2;
+    // The object id to access (required).
+    string object_id = 3;
+    // The version index for the object state. The default value is 0, which
+    // refers to the most recent version.
+    int32 version = 4;
+}
+
+// GetObjectStateResponse represents state for a specific object version.
+message GetObjectStateResponse {
+    // The object's storage group id. The empty string corresponds to the
+    // default storage group.
+    string group_id = 1;
+    // The object's storage root id. The empty string corresponds to the default
+    // storage root.
+    string storage_root_id = 2;
+    // The object's id
+    string object_id = 3;
+    // The index for the object version represented by the state.
+    int32 version = 4;
+    // The object's most recent version index.
+    int32 head = 5;
+    // The object's digest algorithm (sha512 or sha256)
+    string digest_algorithm = 6;
+    // The object's logical state represented as a map from file paths to digest
+    // values using the object's digest algorithm.
+    map<string,string> state = 7;
+    // The message associated with the object version
+    string messsage= 8;
+    // The user information associated with the object version
+    User user = 9;
+    // The timestamp associated witht he object version
+    google.protobuf.Timestamp created = 10;
+    // The OCFL specification version for the object version.
+    string spec = 11;
+}

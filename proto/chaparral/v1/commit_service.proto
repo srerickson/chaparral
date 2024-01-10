@@ -1,0 +1,168 @@
+syntax = "proto3";
+
+package chaparral.v1;
+
+import "chaparral/v1/core.proto";
+import "google/protobuf/timestamp.proto";
+
+// CommitService provides an API for creating, updating, and deleting OCFL objects.
+service CommitService {
+    // Commit creates or updates individual OCFL objects
+    rpc Commit(CommitRequest) returns (CommitResponse) {}
+
+    // NewUploader creates a new uploader where content can be uploaded before
+    // committing it to an object. Uploaders are associated with a specific
+    // storage group.
+    rpc NewUploader(NewUploaderRequest) returns (NewUploaderResponse) {}
+    
+    // GetUploader returns details for a specific uploader
+    rpc GetUploader(GetUploaderRequest) returns (GetUploaderResponse) {}
+
+    // ListUploaders returns a list of uploaders for a given storage group.
+    rpc ListUploaders(ListUploadersRequest) returns (ListUploadersResponse){}
+    
+    // DeleteUploader deletes an uploader and files uploaded to it.
+    rpc DeleteUploader(DeleteUploaderRequest) returns (DeleteUploaderResponse) {}
+   
+    // DeleteObject permanently deletes an existing OCFL object.
+    rpc DeleteObject(DeleteObjectRequest) returns (DeleteObjectResponse) {}
+}
+
+
+message CommitRequest{
+    // group_id is the id of the storage group for the object to create/update
+    string group_id = 1;
+    // storage_root_id is the id of the storage root for the object to create/update
+    string storage_root_id = 2;
+    // object_id is the id for the object to create/update
+    string object_id = 3;
+    // version is used to set the expected number for the new version. If set to 0,
+    // the HEAD+1 is assumed.
+    int32 version = 4;
+    // User information for the commit. The user name and email are saved with
+    // the new object version.
+    User user = 5;
+    // Commit message. The message is saved with the new object version.
+    string message = 6;
+    // state is a map of paths to digests using digest_algorithm
+    map<string,string> state = 7;
+    // digest_algorithm is the id for the digest algorithm used in state.
+    string digest_algorithm = 8;
+   // content source is used to set the location where new content for the
+   // commit is stored.
+    oneof content_source{
+        // get new content from the uploader
+        UploaderSource uploader = 11;
+        // get new content from an existing object
+        ObjectSource object = 12;
+    }
+    message ObjectSource {
+        string group_id = 1;
+        string storage_root_id = 2;
+        string object_id = 3;
+    }
+    message UploaderSource {
+        string group_id = 1;
+        string uploader_id = 2;
+    }
+}
+
+message CommitResponse{}
+
+
+// DeleteObjectRequest is used to delete an object and its files.
+message DeleteObjectRequest{
+    string group_id = 1;
+    string storage_root_id = 2;
+    string object_id = 3;
+}
+
+message DeleteObjectResponse{}
+
+// NewUploaderRequest is used to create new uploaders where files can be
+// uploaded.
+message NewUploaderRequest{
+    // ID of storage group where the uploader will be created
+    string group_id = 1; 
+    // a list of digest algorithms use to digest files uploaded to the uploader.
+    // The list must include `sha512` or `sha256`. 
+    repeated string digest_algorithms = 2; 
+    // An optional uploader description
+    string description = 3; 
+}
+
+message NewUploaderResponse{
+    string group_id = 1;
+    // uploader's unique ID
+    string uploader_id = 2;
+    // algorithm used to digest uploaded data
+    repeated string digest_algorithms = 3;
+    // optional description (may be empty)
+    string description = 4;
+    // ID for user who created uploader (may be empty)
+    string user_id = 5;
+    // timestamp when uploader was created
+    google.protobuf.Timestamp created = 6;
+    // path for uploading content to the uploader
+    string upload_path = 7;
+}
+
+// GetUploaderRequest is used to access information about an existing uploader
+message GetUploaderRequest{
+    string uploader_id = 1;
+}
+
+// GetUploadResponse represent information about an uploader
+message GetUploaderResponse{
+    message Upload {
+        // map of algorithm name to digest value for the upload
+        map<string,string> digests = 1;
+        // size of the upload in bytes
+        int64 size = 2;    
+    }
+    // uploader's unique ID
+    string uploader_id = 1;
+    // storage group where files uploaded to the uploader are stored
+    string group_id = 2;
+    // algorithm used to digest uploaded data
+    repeated string digest_algorithms = 3;
+    // optional description (may be empty)
+    string description = 4;
+    // ID for user who created uploader (may be empty)
+    string user_id = 5;
+    // timestamp when uploader was created
+    google.protobuf.Timestamp created = 6;
+    // path for uploading content to the uploader
+    string upload_path = 7;
+    // list of uploads in the uploader
+    repeated Upload uploads = 8;
+}
+
+// ListUploaderRequest is used to access a list of uploaders in a storage group.
+message ListUploadersRequest{
+    string group_id = 1;
+}
+
+// ListUploaderResponse includes a list of uploaders in a storage group
+message ListUploadersResponse{
+    message Item{
+        string uploader_id = 1;
+        // storage group where uploads are stored.
+        string group_id = 2;
+        // creation date for the uploader
+        google.protobuf.Timestamp created = 3;
+        // optional description (may be empty)
+        string description = 4;
+        // user id for the uploader (may be empty)
+        string user_id = 5;
+    }
+    repeated Item uploaders = 1;
+}
+
+// DeleteUploaderRequest is used to delete an uploader and all its files.
+message DeleteUploaderRequest{
+    string uploader_id = 1;
+}
+
+message DeleteUploaderResponse{}
+

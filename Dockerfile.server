@@ -1,0 +1,13 @@
+FROM cgr.dev/chainguard/go:latest as builder
+WORKDIR /work
+COPY . ./
+RUN go mod download
+RUN go build -o chaparral ./server/cmd/chaparral
+RUN go build -o chaptoken ./cmd/chaptoken
+
+# need glibc for sqlite3
+FROM cgr.dev/chainguard/glibc-dynamic:latest-dev
+COPY --from=builder /work/chaparral /chaparral
+COPY --from=builder /work/chaptoken /chaptoken
+WORKDIR /home/nonroot
+CMD ["/chaparral"]
