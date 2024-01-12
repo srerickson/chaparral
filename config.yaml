@@ -1,0 +1,27 @@
+# This is a minimal chaparral configuration.
+
+# Storage Backend 
+#
+# The backend can be set here or using the CHAPARRAL_BACKEND environment
+# variable.
+#
+# S3 example
+# backend: s3://ocfl-bucket?region=us-west-2
+
+# FS example
+# backend: file:///data
+
+
+# Sorage Root config
+#
+# Multiple OCFL storage roots can be configured. Here the default storage root
+# path is set to `ocfl-default` (relative to the backend). If the storage root
+# doesn't exist, it will be created using values in `init`. Additional storage
+# roots can be added, but they need to include a unique, non-empty `id` value.
+roots:
+- path: "ocfl-default" # path relative to CHAPARRAL_BACKEND
+  init:
+    # if the storage doesn't exist it will be created with 
+    # these optiosn
+    description: "default storage root"
+    layout: "0003-hash-and-id-n-tuple-storage-layout"

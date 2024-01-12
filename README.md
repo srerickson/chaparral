@@ -11,7 +11,17 @@ and S3 backends are supported.
 
 ## Server
 
-The server is distributed as a container image: [srerickson/chaparral](https://hub.docker.com/repository/docker/srerickson/chaparral/general)
+The server is distributed as a container image
+([srerickson/chaparral](https://hub.docker.com/repository/docker/srerickson/chaparral/general)).
+To run chaparral on :8080 using `hack/data` for persistence:
+
+```sh
+docker run --rm -v $(pwd)/hack/data:/data -p 8080:8080 srerickson/chaparral:latest
+```
+
+On first run, a new default OCFL storage root is initialized if one doesn't
+exist. In addition, the server will create a new sqlite3 database for internal
+state and an RSA key for signing auth tokens.
 
 ## API 
 

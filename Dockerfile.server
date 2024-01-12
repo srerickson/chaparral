@@ -5,9 +5,19 @@ RUN go mod download
 RUN go build -o chaparral ./server/cmd/chaparral
 RUN go build -o chaptoken ./cmd/chaptoken
 
-# need glibc for sqlite3
 FROM cgr.dev/chainguard/glibc-dynamic:latest-dev
-COPY --from=builder /work/chaparral /chaparral
-COPY --from=builder /work/chaptoken /chaptoken
-WORKDIR /home/nonroot
-CMD ["/chaparral"]
+# FROM cgr.dev/chainguard/glibc-dynamic:latest 
+USER root
+WORKDIR /
+COPY config.yaml config.yaml
+COPY --from=builder /work/chaparral chaparral
+COPY --from=builder /work/chaptoken chaptoken
+
+# persistent data 
+RUN mkdir /data
+
+ENV CHAPARRAL_BACKEND="file:///data"
+ENV CHAPARRAL_DB="/data/chaparral.sqlite3"
+ENV CHAPARRAL_AUTH_PEM="/data/chaparral.pem"
+ENV CHAPARRAL_LISTEN=":8080"
+CMD ["/chaparral","-c","/config.yaml"]

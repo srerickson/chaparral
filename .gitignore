@@ -4,8 +4,6 @@
 testdata/minio/**
 !testdata/minio/.gitkeep
 
-hack/server/**
-!hack/server/roots.yaml
+hack/data/**
+!hack/data/.gitkeep
 
-hack/cient/**
-!hack/client/.gitkeep
