@@ -28,11 +28,3 @@ type PersistentUploader struct {
 	CreatedAt time.Time
 	Uploads   []Upload
 }
-
-func (p PersistentUploader) uploader() *Uploader {
-	return &Uploader{
-		id:      p.ID,
-		config:  p.Config,
-		created: p.CreatedAt,
-	}
-}
