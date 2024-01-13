@@ -86,11 +86,10 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 	}
 	if req.Msg.User == nil || req.Msg.User.Name == "" {
 		if authUser.Name == "" {
-			err := errors.New("missing required 'user' value")
+			err := errors.New("missing required 'user name' value")
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
-		req.Msg.User.Name = authUser.Name
-		req.Msg.User.Address = authUser.Email
+		req.Msg.User = &chaparralv1.User{Name: authUser.Name, Address: authUser.Email}
 	}
 	// prepare commit: handle different content source types
 	stage := ocfl.NewStage(commitAlg)
