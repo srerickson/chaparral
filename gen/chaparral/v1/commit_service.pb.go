@@ -219,6 +219,7 @@ func (*CommitResponse) Descriptor() ([]byte, []int) {
 	return file_chaparral_v1_commit_service_proto_rawDescGZIP(), []int{1}
 }
 
+// DeleteObjectRequest is used to delete an object and its files.
 type DeleteObjectRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -320,6 +321,8 @@ func (*DeleteObjectResponse) Descriptor() ([]byte, []int) {
 	return file_chaparral_v1_commit_service_proto_rawDescGZIP(), []int{3}
 }
 
+// NewUploaderRequest is used to create new uploaders where files can be
+// uploaded.
 type NewUploaderRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -327,9 +330,10 @@ type NewUploaderRequest struct {
 
 	// ID of storage group where the uploader will be created
 	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
-	// algorithm used to digest uploaded data
+	// a list of digest algorithms use to digest files uploaded to the uploader.
+	// The list must include `sha512` or `sha256`.
 	DigestAlgorithms []string `protobuf:"bytes,2,rep,name=digest_algorithms,json=digestAlgorithms,proto3" json:"digest_algorithms,omitempty"`
-	// uploader description
+	// An optional uploader description
 	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
 }
 
@@ -487,6 +491,7 @@ func (x *NewUploaderResponse) GetUploadPath() string {
 	return ""
 }
 
+// GetUploaderRequest is used to access information about an existing uploader
 type GetUploaderRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -534,6 +539,7 @@ func (x *GetUploaderRequest) GetUploaderId() string {
 	return ""
 }
 
+// GetUploadResponse represent information about an uploader
 type GetUploaderResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -541,7 +547,7 @@ type GetUploaderResponse struct {
 
 	// uploader's unique ID
 	UploaderId string `protobuf:"bytes,1,opt,name=uploader_id,json=uploaderId,proto3" json:"uploader_id,omitempty"`
-	// storage group where uploads are stored
+	// storage group where files uploaded to the uploader are stored
 	GroupId string `protobuf:"bytes,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	// algorithm used to digest uploaded data
 	DigestAlgorithms []string `protobuf:"bytes,3,rep,name=digest_algorithms,json=digestAlgorithms,proto3" json:"digest_algorithms,omitempty"`
@@ -645,6 +651,7 @@ func (x *GetUploaderResponse) GetUploads() []*GetUploaderResponse_Upload {
 	return nil
 }
 
+// ListUploaderRequest is used to access a list of uploaders in a storage group.
 type ListUploadersRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -692,6 +699,7 @@ func (x *ListUploadersRequest) GetGroupId() string {
 	return ""
 }
 
+// ListUploaderResponse includes a list of uploaders in a storage group
 type ListUploadersResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -739,6 +747,7 @@ func (x *ListUploadersResponse) GetUploaders() []*ListUploadersResponse_Item {
 	return nil
 }
 
+// DeleteUploaderRequest is used to delete an uploader and all its files.
 type DeleteUploaderRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -947,8 +956,10 @@ type GetUploaderResponse_Upload struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	// map of algorithm name to digest value for the upload
 	Digests map[string]string `protobuf:"bytes,1,rep,name=digests,proto3" json:"digests,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Size    int64             `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
+	// size of the upload in bytes
+	Size int64 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`
 }
 
 func (x *GetUploaderResponse_Upload) Reset() {
@@ -1003,11 +1014,14 @@ type ListUploadersResponse_Item struct {
 	unknownFields protoimpl.UnknownFields
 
 	UploaderId string `protobuf:"bytes,1,opt,name=uploader_id,json=uploaderId,proto3" json:"uploader_id,omitempty"`
-	// storage group where uploads are stored
-	GroupId     string                 `protobuf:"bytes,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
-	Created     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=created,proto3" json:"created,omitempty"`
-	Description string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
-	UserId      string                 `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// storage group where uploads are stored.
+	GroupId string `protobuf:"bytes,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// creation date for the uploader
+	Created *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=created,proto3" json:"created,omitempty"`
+	// optional description (may be empty)
+	Description string `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	// user id for the uploader (may be empty)
+	UserId string `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 }
 
 func (x *ListUploadersResponse_Item) Reset() {
