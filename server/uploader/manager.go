@@ -87,9 +87,14 @@ func (mgr *Manager) GetUploader(ctx context.Context, uploaderID string) (*Upload
 			// TODO check error
 			return nil, fmt.Errorf("%w: %v", ErrUploaderNotFound, err)
 		}
-		uploader = restored.uploader()
-		uploader.mgr = mgr
-		uploader.refs = 1
+		uploader = &Uploader{
+			id:      restored.ID,
+			config:  restored.Config,
+			created: restored.CreatedAt,
+			uploads: restored.Uploads,
+			mgr:     mgr,
+			refs:    1,
+		}
 		if mgr.uploaders == nil {
 			mgr.uploaders = map[string]*Uploader{}
 		}
