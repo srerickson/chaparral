@@ -21,15 +21,23 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// GetObjectStateRequest is used to request information about an object's state.
 type GetObjectStateRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	GroupId       string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// The storage group id for the object to access. If not set, the default
+	// storage group is used.
+	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// The storage root id for the object to access. If not set, the default
+	// storage root is used.
 	StorageRootId string `protobuf:"bytes,2,opt,name=storage_root_id,json=storageRootId,proto3" json:"storage_root_id,omitempty"`
-	ObjectId      string `protobuf:"bytes,3,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
-	Version       int32  `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
+	// The object id to access (required).
+	ObjectId string `protobuf:"bytes,3,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
+	// The version index for the object state. The default value is 0, which
+	// refers to the most recent version.
+	Version int32 `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
 }
 
 func (x *GetObjectStateRequest) Reset() {
@@ -92,22 +100,37 @@ func (x *GetObjectStateRequest) GetVersion() int32 {
 	return 0
 }
 
+// GetObjectStateResponse represents state for a specific object version.
 type GetObjectStateResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	GroupId         string                 `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
-	StorageRootId   string                 `protobuf:"bytes,2,opt,name=storage_root_id,json=storageRootId,proto3" json:"storage_root_id,omitempty"`
-	ObjectId        string                 `protobuf:"bytes,3,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
-	Version         int32                  `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
-	Head            int32                  `protobuf:"varint,5,opt,name=head,proto3" json:"head,omitempty"`
-	DigestAlgorithm string                 `protobuf:"bytes,6,opt,name=digest_algorithm,json=digestAlgorithm,proto3" json:"digest_algorithm,omitempty"`
-	State           map[string]string      `protobuf:"bytes,7,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Messsage        string                 `protobuf:"bytes,8,opt,name=messsage,proto3" json:"messsage,omitempty"`
-	User            *User                  `protobuf:"bytes,9,opt,name=user,proto3" json:"user,omitempty"`
-	Created         *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created,proto3" json:"created,omitempty"`
-	Spec            string                 `protobuf:"bytes,11,opt,name=spec,proto3" json:"spec,omitempty"`
+	// The object's storage group id. The empty string corresponds to the
+	// default storage group.
+	GroupId string `protobuf:"bytes,1,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
+	// The object's storage root id. The empty string corresponds to the default
+	// storage root.
+	StorageRootId string `protobuf:"bytes,2,opt,name=storage_root_id,json=storageRootId,proto3" json:"storage_root_id,omitempty"`
+	// The object's id
+	ObjectId string `protobuf:"bytes,3,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
+	// The index for the object version represented by the state.
+	Version int32 `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`
+	// The object's most recent version index.
+	Head int32 `protobuf:"varint,5,opt,name=head,proto3" json:"head,omitempty"`
+	// The object's digest algorithm (sha512 or sha256)
+	DigestAlgorithm string `protobuf:"bytes,6,opt,name=digest_algorithm,json=digestAlgorithm,proto3" json:"digest_algorithm,omitempty"`
+	// The object's logical state represented as a map from file paths to digest
+	// values using the object's digest algorithm.
+	State map[string]string `protobuf:"bytes,7,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// The message associated with the object version
+	Messsage string `protobuf:"bytes,8,opt,name=messsage,proto3" json:"messsage,omitempty"`
+	// The user information associated with the object version
+	User *User `protobuf:"bytes,9,opt,name=user,proto3" json:"user,omitempty"`
+	// The timestamp associated witht he object version
+	Created *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created,proto3" json:"created,omitempty"`
+	// The OCFL specification version for the object version.
+	Spec string `protobuf:"bytes,11,opt,name=spec,proto3" json:"spec,omitempty"`
 }
 
 func (x *GetObjectStateResponse) Reset() {

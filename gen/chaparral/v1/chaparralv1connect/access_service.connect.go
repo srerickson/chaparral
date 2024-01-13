@@ -40,8 +40,8 @@ const (
 
 // AccessServiceClient is a client for the chaparral.v1.AccessService service.
 type AccessServiceClient interface {
-	// GetObjectState returns logical state, manifest and other information
-	// for a given OCFL object.
+	// GetObjectState returns logical state, and other information for a given
+	// OCFL object version.
 	GetObjectState(context.Context, *connect_go.Request[v1.GetObjectStateRequest]) (*connect_go.Response[v1.GetObjectStateResponse], error)
 }
 
@@ -75,8 +75,8 @@ func (c *accessServiceClient) GetObjectState(ctx context.Context, req *connect_g
 
 // AccessServiceHandler is an implementation of the chaparral.v1.AccessService service.
 type AccessServiceHandler interface {
-	// GetObjectState returns logical state, manifest and other information
-	// for a given OCFL object.
+	// GetObjectState returns logical state, and other information for a given
+	// OCFL object version.
 	GetObjectState(context.Context, *connect_go.Request[v1.GetObjectStateRequest]) (*connect_go.Response[v1.GetObjectStateResponse], error)
 }
 
