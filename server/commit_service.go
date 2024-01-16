@@ -150,17 +150,17 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			err := fmt.Errorf("unknown storage root for source object state: %s", src.Object.StorageRootId)
 			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
-		srcObj, err := srcStore.GetObject(ctx, src.Object.ObjectId)
+		srcObj, err := srcStore.GetObjectState(ctx, src.Object.ObjectId, 0)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("in source content: %w", err))
 		}
 		defer srcObj.Close()
-		if srcAlg := srcObj.Inventory.DigestAlgorithm; srcAlg != commitAlg {
+		if srcAlg := srcObj.Alg; srcAlg != commitAlg {
 			err = fmt.Errorf("commit declares %s, but source object was created with %s", commitAlg, srcAlg)
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
-		stage.SetFS(srcObj.FS, srcObj.Path)
-		if err = stage.UnsafeSetManifestFixty(srcObj.Inventory.Manifest, srcObj.Inventory.Fixity); err != nil {
+		stage.SetFS(srcObj.FS, srcObj.Root)
+		if err = stage.UnsafeSetManifestFixty(srcObj.Manifest, srcObj.Fixity); err != nil {
 			err = fmt.Errorf("building new stage manifest from source object: %w", err)
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}

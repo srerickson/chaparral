@@ -45,27 +45,24 @@ func TestStorageRoot(t *testing.T) {
 	srcRoot, err := testdataGroup.StorageRoot("test")
 	be.NilErr(t, err)
 
-	srcObj, err := srcRoot.GetObject(ctx, "ark:123/abc")
+	srcObj, err := srcRoot.GetObjectState(ctx, "ark:123/abc", 0)
 	be.NilErr(t, err)
 	defer srcObj.Close()
-	srcState, err := srcObj.State(0)
-	be.NilErr(t, err)
-	id := srcObj.Inventory.ID
 
 	// commit stage that is a fork of srcObj
-	stage := ocfl.NewStage(srcObj.Inventory.DigestAlgorithm)
-	stage.State = srcState.DigestMap
+	stage := ocfl.NewStage(srcObj.Alg)
+	stage.State = srcObj.State
 	stage.FS = srcObj.FS
-	stage.Root = srcObj.Path
-	err = stage.UnsafeSetManifestFixty(srcState.Manifest, srcObj.Inventory.Fixity)
+	stage.Root = srcObj.Root
+	err = stage.UnsafeSetManifestFixty(srcObj.Manifest, srcObj.Fixity)
 	be.NilErr(t, err)
 
 	// test concurrent go-routines
 	errs := goGroupErrors(2, func() error {
-		return root.Commit(ctx, id, stage,
-			ocflv1.WithCreated(srcState.Created),
-			ocflv1.WithMessage(srcState.Message),
-			ocflv1.WithUser(*srcState.User),
+		return root.Commit(ctx, srcObj.ID, stage,
+			ocflv1.WithCreated(srcObj.Created),
+			ocflv1.WithMessage(srcObj.Message),
+			ocflv1.WithUser(*srcObj.User),
 			ocflv1.WithOCFLSpec(srcObj.Spec),
 		)
 	})
@@ -80,20 +77,18 @@ func TestStorageRoot(t *testing.T) {
 	}))
 
 	// new object exists with expected state
-	newObj, err := root.GetObject(ctx, id)
+	newState, err := root.GetObjectState(ctx, srcObj.ID, 0)
 	be.NilErr(t, err)
-	newState, err := newObj.State(0)
-	be.NilErr(t, err)
-	be.DeepEqual(t, srcState, newState)
+	be.DeepEqual(t, srcObj.State, newState.State)
 
-	// delete should fail because newObj is not closed
-	err = root.DeleteObject(ctx, id)
+	// delete should fail because newState is not closed
+	err = root.DeleteObject(ctx, srcObj.ID)
 	be.True(t, errors.Is(err, lock.ErrWriteLock))
 
 	// close newObj and check Delete()
-	newObj.Close()
+	newState.Close()
 	errs = goGroupErrors(2, func() error {
-		return root.DeleteObject(ctx, id)
+		return root.DeleteObject(ctx, newState.ID)
 	})
 	// DeleteObject() should have succeeded once
 	be.True(t, slices.Contains(errs, nil))
@@ -106,7 +101,7 @@ func TestStorageRoot(t *testing.T) {
 	}))
 
 	// object is gone
-	_, err = root.GetObject(ctx, id)
+	_, err = root.GetObjectState(ctx, srcObj.ID, 0)
 	be.True(t, errors.Is(err, fs.ErrNotExist))
 }
 

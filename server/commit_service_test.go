@@ -75,9 +75,9 @@ func TestCommitServiceCommit(t *testing.T) {
 		store, err := grp.StorageRoot("test")
 		be.NilErr(t, err)
 		// check object directly
-		obj, err := store.GetObject(ctx, "new-01")
+		obj, err := store.GetObjectState(ctx, "new-01", 0)
 		be.NilErr(t, err)
-		be.Equal(t, len(filenames), obj.Inventory.Manifest.LenPaths())
+		be.Equal(t, len(filenames), obj.State.LenPaths())
 		result, err := store.Validate(ctx)
 		be.NilErr(t, err)
 		be.NilErr(t, result.Err())

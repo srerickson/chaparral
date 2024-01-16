@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/srerickson/chaparral/server/internal/lock"
 	ocfl "github.com/srerickson/ocfl-go"
@@ -79,17 +80,28 @@ func (store *StorageRoot) ResolveID(id string) (string, error) {
 	return store.base.ResolveID(id)
 }
 
-// Object is an ocflv1.Object with an ObjectHandler for syncronizing
-// operations on the object
-type Object struct {
-	Close func()
-	*ocflv1.Object
+// ObjectState represent an OCFL Object with a specific version state.
+type ObjectState struct {
+	FS       ocfl.FS
+	Root     string
+	ID       string
+	Version  int
+	Head     int
+	Spec     ocfl.Spec
+	Alg      string
+	State    ocfl.DigestMap
+	Manifest ocfl.DigestMap
+	Message  string
+	User     *ocfl.User
+	Created  time.Time
+	Fixity   map[string]ocfl.DigestMap
+	Close    func()
 }
 
-// GetObject returns an Object reference that supports concurrent access.
+// GetObjectState returns an Object reference that supports concurrent access.
 // Commits to objectID will fail until the Close() is called on the returned
 // Object.
-func (store *StorageRoot) GetObject(ctx context.Context, objectID string) (*Object, error) {
+func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v int) (*ObjectState, error) {
 	if err := store.Ready(ctx); err != nil {
 		return nil, err
 	}
@@ -97,13 +109,37 @@ func (store *StorageRoot) GetObject(ctx context.Context, objectID string) (*Obje
 	if err != nil {
 		return nil, err
 	}
-	obj, err := store.base.GetObject(ctx, objectID)
+	o, err := store.base.GetObject(ctx, objectID)
 	if err != nil {
 		unlock()
 		return nil, err
 	}
+	if v == 0 {
+		v = o.Inventory.Head.Num()
+	}
+	obj := ObjectState{
+		FS:       o.ObjectRoot.FS,
+		Root:     o.ObjectRoot.Path,
+		ID:       o.Inventory.ID,
+		Alg:      o.Inventory.DigestAlgorithm,
+		Spec:     o.Inventory.Type.Spec,
+		Head:     o.Inventory.Head.Num(),
+		Manifest: o.Inventory.Manifest,
+		Fixity:   o.Inventory.Fixity,
+		Version:  v,
+		Close:    unlock,
+	}
+	ver := o.Inventory.GetVersion(v)
+	if ver == nil {
+		unlock()
+		return nil, errors.New("version not found")
+	}
+	obj.State = ver.State
+	obj.Message = ver.Message
+	obj.User = ver.User
+	obj.Created = ver.Created
 	// must call Close() on the returned Object.
-	return &Object{Object: obj, Close: unlock}, nil
+	return &obj, nil
 }
 
 func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *ocfl.Stage, opts ...ocflv1.CommitOption) error {
