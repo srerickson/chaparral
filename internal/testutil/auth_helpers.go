@@ -38,7 +38,7 @@ var (
 	AllowAll = server.Permissions{
 		// anyone can do anythong
 		server.DefaultRole: []server.RolePermission{
-			{Actions: []string{"*"}, StorageGroupID: "*", StorageRootID: "*"},
+			{Actions: []string{"*"}, StorageRootID: "*"},
 		},
 	}
 	AllowNone = server.Permissions(nil)

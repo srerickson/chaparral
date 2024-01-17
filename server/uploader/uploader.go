@@ -7,13 +7,11 @@ import (
 	"io"
 	"path"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/srerickson/ocfl-go"
-	"golang.org/x/exp/maps"
 )
 
 var (
@@ -41,13 +39,7 @@ type Uploader struct {
 }
 
 func (up *Uploader) Root() (ocfl.WriteFS, string) {
-	grp, ok := up.mgr.roots[up.config.RootID]
-	if !ok {
-		groups := strings.Join(maps.Keys(up.mgr.roots), ", ")
-		err := fmt.Errorf("uploader has groupID %q, but its upload manager only has groups %q", up.config.RootID, groups)
-		panic(err)
-	}
-	return grp.FS, path.Join(grp.Dir, up.id)
+	return up.mgr.fs, path.Join(up.mgr.dir, up.id)
 }
 
 func (up *Uploader) Config() *Config {
@@ -55,7 +47,6 @@ func (up *Uploader) Config() *Config {
 		Description: up.config.Description,
 		Algs:        slices.Clone(up.config.Algs),
 		UserID:      up.config.UserID,
-		RootID:      up.config.RootID,
 	}
 }
 
@@ -153,7 +144,6 @@ func (up *Uploader) Write(ctx context.Context, r io.Reader) (*Upload, error) {
 }
 
 type Config struct {
-	RootID      string   `json:"root_id"`
 	UserID      string   `json:"user"`
 	Algs        []string `json:"digest_algorithms"`
 	Description string   `json:"description"`

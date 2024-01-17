@@ -20,30 +20,21 @@ func TestStorageRoot(t *testing.T) {
 	ctx := context.Background()
 
 	// storage group backed by a tempdir
-	tmpGroup := testutil.MkGroupTempDir(t)
-	ok, err := tmpGroup.IsAccessible()
-	be.NilErr(t, err)
-	be.True(t, ok)
-	root, err := tmpGroup.StorageRoot("test")
-	be.NilErr(t, err)
+	root := testutil.MkGroupTempDir(t)
+	be.NilErr(t, root.Ready(ctx))
 
 	// create the storage root
 	be.NilErr(t, root.Ready(ctx))
 
 	be.True(t, root.Description() != "")
 	be.Nonzero(t, root.Spec())
-	_, err = root.ResolveID("test-id")
+	_, err := root.ResolveID("test-id")
 	be.NilErr(t, err)
 
 	// the testdata storage groups has a storage root called "test" that is
 	// read-only. Used here as a content source
-	testdataGroup, err := testutil.MkGroupTestdata(filepath.Join("..", "testdata"))
-	be.NilErr(t, err)
-	ok, err = testdataGroup.IsAccessible()
-	be.NilErr(t, err)
-	be.True(t, ok)
-	srcRoot, err := testdataGroup.StorageRoot("test")
-	be.NilErr(t, err)
+	srcRoot := testutil.MkGroupTestdata(t, filepath.Join("..", "testdata"))
+	be.NilErr(t, srcRoot.Ready(ctx))
 
 	srcObj, err := srcRoot.GetObjectState(ctx, "ark:123/abc", 0)
 	be.NilErr(t, err)

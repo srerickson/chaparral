@@ -23,9 +23,6 @@ import (
 	"github.com/srerickson/chaparral/server"
 	"github.com/srerickson/chaparral/server/backend"
 	"github.com/srerickson/chaparral/server/chapdb"
-	"github.com/srerickson/ocfl-go"
-	"github.com/srerickson/ocfl-go/extension"
-	"github.com/srerickson/ocfl-go/ocflv1"
 
 	"github.com/go-chi/httplog/v2"
 	"github.com/kkyr/fig"
@@ -52,11 +49,10 @@ type config struct {
 type root struct {
 	ID   string `fig:"id"`
 	Path string `fig:"path" validate:"required"`
-	Init struct {
+	Init *struct {
 		Layout      string `fig:"layout" default:"0002-flat-direct-storage-layout"`
 		Description string `fig:"description"`
 	} `fig:"init"`
-	NoInit bool `fig:"no_init"`
 }
 
 var loggerOptions = httplog.Options{
@@ -92,45 +88,29 @@ func main() {
 		logger.Error(fmt.Sprintf("initializing backend: %v", err))
 		os.Exit(1)
 	}
+	fsys, err := backend.NewFS()
+	if err != nil {
+		logger.Error(fmt.Sprintf("backend configuration has errors: %v", err))
+		return
+	}
 	if ok, err := backend.IsAccessible(); !ok {
 		logger.Error(fmt.Sprintf("backend not accessible: %v", err), "storage", conf.Backend)
 	}
-
-	defaultGrp, err := server.NewStorageGroup("", backend)
-	if err != nil {
-		logger.Error(fmt.Sprintf("initializing storage group: %v", err))
-		os.Exit(1)
-	}
+	roots := []*server.StorageRoot{}
 	for _, rootConfig := range conf.Roots {
-		switch {
-		case rootConfig.NoInit:
-			if err := defaultGrp.AddStorageRoot(rootConfig.ID, rootConfig.Path); err != nil {
-				logger.Error(fmt.Sprintf("can't use OCFL Root: %v", err))
-				os.Exit(1)
-			}
-		default:
-			layout, err := extension.Get(rootConfig.Init.Layout)
-			if err != nil {
-				logger.Error(fmt.Sprintf("invalid config for OCFL root: %v", err))
-				os.Exit(1)
-			}
-			config := &ocflv1.InitStoreConf{
-				Layout:      layout.(extension.Layout),
+		var init *server.StorageInitializer
+		if rootConfig.Init != nil {
+			init = &server.StorageInitializer{
 				Description: rootConfig.Init.Description,
-				Spec:        ocfl.Spec1_1,
-			}
-			if err := defaultGrp.InitStorageRoot(context.Background(), rootConfig.ID, rootConfig.Path, config); err != nil {
-				logger.Error(fmt.Sprintf("initializing default OCFL Root: %v", err))
-				os.Exit(1)
+				Layout:      rootConfig.Init.Layout,
 			}
 		}
+		r := server.NewStorageRoot(rootConfig.ID, fsys, rootConfig.Path, init)
+		roots = append(roots, r)
 	}
 
 	if conf.Uploads != "" {
-		if err := defaultGrp.SetUploadRoot(conf.Uploads); err != nil {
-			logger.Error(fmt.Sprintf("initializing upload storage: %v", err))
-			os.Exit(1)
-		}
+		// TODO
 	}
 	// authentication config (load RSA key used in JWS signing)
 	authKey, err := loadRSAKey(conf.AuthPEM)
@@ -143,13 +123,15 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
+
+	//mgr := uploader.NewManager()
+
 	defer db.Close()
 	mux := server.New(
+		server.WithStorageRoots(roots...),
 		server.WithLogger(logger.Logger),
 		server.WithAuthUserFunc(server.DefaultAuthUserFunc(&authKey.PublicKey)),
 		server.WithAuthorizer(server.DefaultPermissions()),
-		server.WithStorageGroups(defaultGrp),
-		server.WithSQLDB(db),
 		server.WithMiddleware(
 			// log all requests
 			httplog.RequestLogger(logger),

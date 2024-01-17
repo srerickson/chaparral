@@ -1,13 +1,11 @@
 package server
 
 import (
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/srerickson/chaparral/server/chapdb"
 	"github.com/srerickson/chaparral/server/uploader"
 )
 
@@ -20,11 +18,9 @@ type chaparral struct {
 
 type config struct {
 	chaparral
-	uploadRoots []uploader.Root
-	db          *chapdb.SQLiteDB
-	middleware  chi.Middlewares
-	logger      *slog.Logger
-	authFunc    AuthUserFunc
+	middleware chi.Middlewares
+	logger     *slog.Logger
+	authFunc   AuthUserFunc
 }
 
 // New returns a server mux with registered handlers for access and commit
@@ -33,9 +29,6 @@ func New(opts ...Option) *chi.Mux {
 	cfg := config{}
 	for _, o := range opts {
 		o(&cfg)
-	}
-	if len(cfg.uploadRoots) > 0 {
-		cfg.chaparral.uploadMgr = uploader.NewManager(cfg.uploadRoots, cfg.db)
 	}
 	mux := chi.NewMux()
 	if cfg.logger != nil {
@@ -55,24 +48,18 @@ func New(opts ...Option) *chi.Mux {
 // Option is used to configure the server mux created with New
 type Option func(*config)
 
-func WithStorageGroups(groups ...*StorageRoot) Option {
+func WithStorageRoots(roots ...*StorageRoot) Option {
 	return func(c *config) {
-		c.roots = make(map[string]*StorageRoot, len(groups))
-		for _, g := range groups {
+		c.roots = make(map[string]*StorageRoot, len(roots))
+		for _, g := range roots {
 			c.roots[g.id] = g
 		}
 	}
 }
 
-func WithUploader() Option {
+func WithUploader(mgr *uploader.Manager) Option {
 	return func(c *config) {
-		c.uploadRoots = []uploader.Root{}
-	}
-}
-
-func WithSQLDB(db *sql.DB) Option {
-	return func(c *config) {
-		c.db = (*chapdb.SQLiteDB)(db)
+		c.chaparral.uploadMgr = mgr
 	}
 }
 

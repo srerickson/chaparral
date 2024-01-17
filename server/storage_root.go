@@ -25,39 +25,56 @@ var (
 // StorageRoot represent an existing OCFL Storage Root in a Group
 type StorageRoot struct {
 	id      string
-	backend Backend
 	fs      ocfl.WriteFS
 	base    *ocflv1.Store
 	baseErr error
 	path    string // path for storage root in backend
 	locker  *lock.Locker
+	init    *StorageInitializer
 	once    sync.Once // initialize base
 }
 
 type StorageInitializer struct {
-	Create      bool      `json:"create"`
-	Spec        ocfl.Spec `json:"ocfl,omitempty"`
-	Description string    `json:"description,omitempty"`
-	Layout      string    `json:"layout,omitempty"`
+	Description string `json:"description,omitempty"`
+	Layout      string `json:"layout,omitempty"`
 	//LayoutConfig map[string]any `json:"layout_config,omitempty"`
 }
 
-func NewStorageRoot(id string, backend Backend, path string) *StorageRoot {
+func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageInitializer) *StorageRoot {
 	return &StorageRoot{
-		id:      id,
-		backend: backend,
-		path:    path,
-		locker:  lock.NewLocker(objectMgrCap),
+		id:     id,
+		fs:     fsys,
+		path:   path,
+		init:   init,
+		locker: lock.NewLocker(objectMgrCap),
 	}
 }
 
 func (store *StorageRoot) Ready(ctx context.Context) error {
 	store.once.Do(func() {
-		store.fs, store.baseErr = store.backend.NewFS()
-		if store.baseErr != nil {
+		store.base, store.baseErr = ocflv1.GetStore(ctx, store.fs, store.path)
+		if store.baseErr == nil || store.init == nil {
 			return
 		}
-		store.base, store.baseErr = ocflv1.GetStore(ctx, store.fs, store.path)
+		// try to initislize the storage root
+		layout := defaultLayout
+		if store.init.Layout != "" {
+			l, err := extension.Get(store.init.Layout)
+			if err != nil {
+				store.baseErr = err
+				return
+			}
+			layout = l.(extension.Layout)
+		}
+		conf := ocflv1.InitStoreConf{
+			Spec:        defaultSpec,
+			Description: store.init.Description,
+			Layout:      layout,
+		}
+		if err := ocflv1.InitStore(ctx, store.fs, store.path, &conf); err != nil {
+			store.baseErr = err
+			return
+		}
 	})
 	return store.baseErr
 }
@@ -68,6 +85,8 @@ func (store *StorageRoot) FS() ocfl.WriteFS {
 }
 
 func (store *StorageRoot) Path() string { return store.path }
+
+func (store *StorageRoot) ID() string { return store.id }
 
 func (store *StorageRoot) Description() string {
 	if store.base != nil {

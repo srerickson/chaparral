@@ -49,7 +49,7 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		"version", req.Msg.Version,
 	)
 	user := AuthUserFromCtx(ctx)
-	store, err := s.storageRoot(req.Msg.GroupId, req.Msg.StorageRootId)
+	store, err := s.storageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -111,7 +111,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	store, err := srv.storageRoot(groupID, storeID)
+	store, err := srv.storageRoot(storeID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return

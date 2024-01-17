@@ -58,7 +58,6 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 	commitCtx := context.WithoutCancel(ctx)
 	authUser := AuthUserFromCtx(ctx)
 	logger := LoggerFromCtx(ctx).With(
-		// QueryGroupID, req.Msg.GroupId,
 		QueryStorageRoot, req.Msg.StorageRootId,
 		QueryObjectID, req.Msg.ObjectId,
 		"user_id", authUser.ID,
@@ -102,17 +101,10 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 	case *chaparralv1.CommitRequest_Uploader:
 		// commit content from uploader
 		uploaderID := src.Uploader.UploaderId
-		upGroupID := src.Uploader.GroupId
 		logger = logger.With(
-			"uploader_group_id", upGroupID,
 			"uploader_id", src.Uploader.UploaderId,
 		)
 		logger.Debug("commit from uploader")
-		group := s.storeGrps[src.Uploader.GroupId]
-		if group == nil {
-			err := fmt.Errorf("invalid storage group id: %q", upGroupID)
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
 		upper, err := s.uploadMgr.GetUploader(ctx, uploaderID)
 		if err != nil {
 			err = fmt.Errorf("getting uploader %q: %w", src.Uploader.UploaderId, err)
@@ -145,7 +137,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			err := errors.New("can't use self as object content source")
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
-		srcStore, err := s.storageRoot(src.Object.GroupId, src.Object.StorageRootId)
+		srcStore, err := s.storageRoot(src.Object.StorageRootId)
 		if err != nil {
 			err := fmt.Errorf("unknown storage root for source object state: %s", src.Object.StorageRootId)
 			return nil, connect.NewError(connect.CodeNotFound, err)
@@ -183,7 +175,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 
 // DeleteObject permanently deletes an existing OCFL object.
 func (s *CommitService) DeleteObject(ctx context.Context, req *connect.Request[chaparralv1.DeleteObjectRequest]) (*connect.Response[chaparralv1.DeleteObjectResponse], error) {
-	store, err := s.storageRoot(req.Msg.GroupId, req.Msg.StorageRootId)
+	store, err := s.storageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -206,15 +198,6 @@ func (s *CommitService) DeleteObject(ctx context.Context, req *connect.Request[c
 func (s *CommitService) NewUploader(ctx context.Context, req *connect.Request[chaparralv1.NewUploaderRequest]) (*connect.Response[chaparralv1.NewUploaderResponse], error) {
 	logger := LoggerFromCtx(ctx)
 	user := AuthUserFromCtx(ctx)
-	group := s.storeGrps[req.Msg.GroupId]
-	if group == nil {
-		err := fmt.Errorf("unknown storage group id: %q", req.Msg.GroupId)
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	}
-	if group.UploadRoot() == nil {
-		err := errors.New("storage group doesn't support uploads")
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	}
 	if !slices.ContainsFunc(req.Msg.DigestAlgorithms, func(alg string) bool {
 		return alg == ocfl.SHA256 || alg == ocfl.SHA512
 	}) {
@@ -228,7 +211,6 @@ func (s *CommitService) NewUploader(ctx context.Context, req *connect.Request[ch
 		}
 	}
 	uploaderConfig := &uploader.Config{
-		RootID:      req.Msg.GroupId,
 		Description: req.Msg.Description,
 		UserID:      user.ID,
 		Algs:        req.Msg.DigestAlgorithms,
@@ -252,7 +234,6 @@ func (s *CommitService) NewUploader(ctx context.Context, req *connect.Request[ch
 	config := newUp.Config()
 	resp := &chaparralv1.NewUploaderResponse{
 		UploaderId:       id,
-		GroupId:          config.RootID,
 		UserId:           config.UserID,
 		Description:      config.Description,
 		DigestAlgorithms: config.Algs,
@@ -295,11 +276,6 @@ func (s *CommitService) GetUploader(ctx context.Context, req *connect.Request[ch
 
 func (s *CommitService) ListUploaders(ctx context.Context, req *connect.Request[chaparralv1.ListUploadersRequest]) (*connect.Response[chaparralv1.ListUploadersResponse], error) {
 	logger := LoggerFromCtx(ctx)
-	group := s.storeGrps[req.Msg.GroupId]
-	if group == nil {
-		err := fmt.Errorf("invalid storage group id: %q", req.Msg.GroupId)
-		return nil, connect.NewError(connect.CodeInvalidArgument, err)
-	}
 	ids, err := s.uploadMgr.UploaderIDs(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -319,7 +295,6 @@ func (s *CommitService) ListUploaders(ctx context.Context, req *connect.Request[
 		}
 		config := upper.Config()
 		resp.Uploaders[i] = &chaparralv1.ListUploadersResponse_Item{
-			GroupId:     req.Msg.GroupId,
 			UploaderId:  id,
 			Created:     timestamppb.New(upper.Created()),
 			Description: config.Description,
@@ -364,7 +339,6 @@ type HandleUploadResponse struct {
 }
 
 // Handler for file uploads.
-// TODO: check user permissions
 func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := AuthUserFromCtx(ctx)
@@ -375,16 +349,9 @@ func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 			logger.Error(err.Error())
 		}
 	}()
-	groupID := r.URL.Query().Get(QueryGroupID)
 	uploaderID := r.URL.Query().Get(QueryUploaderID)
 	//logger.DebugContext(ctx, "upload", QueryGroupID, groupID, QueryUploaderID, uploaderID)
-	group := s.storeGrps[groupID]
-	if group == nil {
-		w.WriteHeader(http.StatusBadRequest)
-		result.Err = fmt.Sprintf("invalid storage group id: %q", groupID)
-		return
-	}
-	if s.auth != nil && !s.auth.GroupActionAllowed(ctx, &user, CommitAction, groupID) {
+	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, CommitAction, "FIXME") {
 		w.WriteHeader(http.StatusUnauthorized)
 		result.Err = "you don't have permission to upload to this storage group"
 		return
@@ -429,26 +396,24 @@ func (s *CommitService) AuthorizeInterceptor() connect.UnaryInterceptorFunc {
 			var ok bool
 			switch msg := req.Any().(type) {
 			case *chaparralv1.CommitRequest:
-				ok = s.auth.RootActionAllowed(ctx, &user, CommitAction, msg.GroupId, msg.StorageRootId)
+				ok = s.auth.RootActionAllowed(ctx, &user, CommitAction, msg.StorageRootId)
 				if !ok {
 					break
 				}
 				// check permission to read source object (if commit uses one)
 				if obj, isObj := msg.ContentSource.(*chaparralv1.CommitRequest_Object); isObj {
-					ok = s.auth.RootActionAllowed(ctx, &user, ReadAction, obj.Object.GroupId, obj.Object.StorageRootId)
+					ok = s.auth.RootActionAllowed(ctx, &user, ReadAction, obj.Object.StorageRootId)
 				}
 			case *chaparralv1.DeleteObjectRequest:
-				ok = s.auth.RootActionAllowed(ctx, &user, DeleteAction, msg.GroupId, msg.StorageRootId)
+				ok = s.auth.RootActionAllowed(ctx, &user, DeleteAction, msg.StorageRootId)
 			case *chaparralv1.NewUploaderRequest:
-				ok = s.auth.GroupActionAllowed(ctx, &user, CommitAction, msg.GroupId)
+				ok = s.auth.ActionAllowed(ctx, &user, CommitAction)
 			case *chaparralv1.DeleteUploaderRequest:
-				// ok = s.auth.GroupActionAllowed(ctx, &user, CommitAction, msg.GroupId)
-				ok = true
+				ok = s.auth.ActionAllowed(ctx, &user, CommitAction)
 			case *chaparralv1.GetUploaderRequest:
-				//ok = s.auth.GroupActionAllowed(ctx, &user, ReadAction, msg.GroupId)
-				ok = true
+				ok = s.auth.ActionAllowed(ctx, &user, CommitAction)
 			case *chaparralv1.ListUploadersRequest:
-				ok = s.auth.GroupActionAllowed(ctx, &user, ReadAction, msg.GroupId)
+				ok = s.auth.ActionAllowed(ctx, &user, CommitAction)
 			}
 			if !ok {
 				return nil, connect.NewError(connect.CodePermissionDenied, errors.New("API key insufficient permission"))

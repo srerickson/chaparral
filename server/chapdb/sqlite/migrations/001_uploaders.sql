@@ -1,7 +1,6 @@
 -- +goose Up
 CREATE TABLE uploaders (
     id text PRIMARY KEY,
-    root_id text NOT NULL,
     user_id text NOT NULL,
     algs text NOT NULL,
     description text NOT NULL,

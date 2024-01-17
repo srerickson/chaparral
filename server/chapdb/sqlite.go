@@ -57,7 +57,6 @@ func (db *SQLiteDB) CreateUploader(ctx context.Context, upper *uploader.Persiste
 	qry := sqlite.New(db.sqlDB())
 	_, err := qry.CreateUploader(ctx, sqlite.CreateUploaderParams{
 		ID:          upper.ID,
-		RootID:      upper.Config.RootID,
 		UserID:      upper.Config.UserID,
 		Algs:        strings.Join(upper.Config.Algs, ","),
 		Description: upper.Config.Description,
@@ -109,7 +108,6 @@ func (db *SQLiteDB) GetUploader(ctx context.Context, id string) (*uploader.Persi
 		ID:        sqlUpper.ID,
 		CreatedAt: sqlUpper.CreatedAt.UTC(),
 		Config: uploader.Config{
-			RootID:      sqlUpper.RootID,
 			UserID:      sqlUpper.UserID,
 			Algs:        strings.Split(sqlUpper.Algs, ","),
 			Description: sqlUpper.Description,

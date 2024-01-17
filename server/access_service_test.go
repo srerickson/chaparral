@@ -26,10 +26,8 @@ func TestAccessServiceHandler(t *testing.T) {
 	storePath := path.Join("storage-roots", "root-01")
 	objectID := "ark:123/abc"
 	storeID := "test"
-	group, err := testutil.MkGroupTestdata(testdataDir)
-	be.NilErr(t, err)
-	mux := server.New(server.WithStorageGroups(group))
-	be.NilErr(t, err)
+	group := testutil.MkGroupTestdata(t, testdataDir)
+	mux := server.New(server.WithStorageRoots(group))
 	srv := httptest.NewTLSServer(mux)
 	defer srv.Close()
 	httpClient := srv.Client()

@@ -30,40 +30,36 @@ service CommitService {
 
 
 message CommitRequest{
-    // group_id is the id of the storage group for the object to create/update
-    string group_id = 1;
     // storage_root_id is the id of the storage root for the object to create/update
-    string storage_root_id = 2;
+    string storage_root_id = 1;
     // object_id is the id for the object to create/update
-    string object_id = 3;
+    string object_id = 2;
     // version is used to set the expected number for the new version. If set to 0,
     // the HEAD+1 is assumed.
-    int32 version = 4;
+    int32 version = 3;
     // User information for the commit. The user name and email are saved with
     // the new object version.
-    User user = 5;
+    User user = 4;
     // Commit message. The message is saved with the new object version.
-    string message = 6;
+    string message = 5;
     // state is a map of paths to digests using digest_algorithm
-    map<string,string> state = 7;
+    map<string,string> state = 6;
     // digest_algorithm is the id for the digest algorithm used in state.
-    string digest_algorithm = 8;
+    string digest_algorithm = 7;
    // content source is used to set the location where new content for the
    // commit is stored.
     oneof content_source{
         // get new content from the uploader
-        UploaderSource uploader = 11;
+        UploaderSource uploader = 10;
         // get new content from an existing object
-        ObjectSource object = 12;
+        ObjectSource object = 11;
     }
     message ObjectSource {
-        string group_id = 1;
-        string storage_root_id = 2;
-        string object_id = 3;
+        string storage_root_id = 1;
+        string object_id = 2;
     }
     message UploaderSource {
-        string group_id = 1;
-        string uploader_id = 2;
+        string uploader_id = 1;
     }
 }
 
@@ -72,9 +68,8 @@ message CommitResponse{}
 
 // DeleteObjectRequest is used to delete an object and its files.
 message DeleteObjectRequest{
-    string group_id = 1;
-    string storage_root_id = 2;
-    string object_id = 3;
+    string storage_root_id = 1;
+    string object_id = 2;
 }
 
 message DeleteObjectResponse{}
@@ -82,29 +77,25 @@ message DeleteObjectResponse{}
 // NewUploaderRequest is used to create new uploaders where files can be
 // uploaded.
 message NewUploaderRequest{
-    // ID of storage group where the uploader will be created
-    string group_id = 1; 
     // a list of digest algorithms use to digest files uploaded to the uploader.
     // The list must include `sha512` or `sha256`. 
-    repeated string digest_algorithms = 2; 
+    repeated string digest_algorithms = 1; 
     // An optional uploader description
-    string description = 3; 
+    string description = 2; 
 }
 
 message NewUploaderResponse{
-    string group_id = 1;
-    // uploader's unique ID
-    string uploader_id = 2;
+    string uploader_id = 1;
     // algorithm used to digest uploaded data
-    repeated string digest_algorithms = 3;
+    repeated string digest_algorithms = 2;
     // optional description (may be empty)
-    string description = 4;
+    string description = 3;
     // ID for user who created uploader (may be empty)
-    string user_id = 5;
+    string user_id = 4;
     // timestamp when uploader was created
-    google.protobuf.Timestamp created = 6;
+    google.protobuf.Timestamp created = 5;
     // path for uploading content to the uploader
-    string upload_path = 7;
+    string upload_path = 6;
 }
 
 // GetUploaderRequest is used to access information about an existing uploader
@@ -122,39 +113,33 @@ message GetUploaderResponse{
     }
     // uploader's unique ID
     string uploader_id = 1;
-    // storage group where files uploaded to the uploader are stored
-    string group_id = 2;
     // algorithm used to digest uploaded data
-    repeated string digest_algorithms = 3;
+    repeated string digest_algorithms = 2;
     // optional description (may be empty)
-    string description = 4;
+    string description = 3;
     // ID for user who created uploader (may be empty)
-    string user_id = 5;
+    string user_id = 4;
     // timestamp when uploader was created
-    google.protobuf.Timestamp created = 6;
+    google.protobuf.Timestamp created = 5;
     // path for uploading content to the uploader
-    string upload_path = 7;
+    string upload_path = 6;
     // list of uploads in the uploader
-    repeated Upload uploads = 8;
+    repeated Upload uploads = 7;
 }
 
 // ListUploaderRequest is used to access a list of uploaders in a storage group.
-message ListUploadersRequest{
-    string group_id = 1;
-}
+message ListUploadersRequest{}
 
 // ListUploaderResponse includes a list of uploaders in a storage group
 message ListUploadersResponse{
     message Item{
         string uploader_id = 1;
-        // storage group where uploads are stored.
-        string group_id = 2;
         // creation date for the uploader
-        google.protobuf.Timestamp created = 3;
+        google.protobuf.Timestamp created = 2;
         // optional description (may be empty)
-        string description = 4;
+        string description = 3;
         // user id for the uploader (may be empty)
-        string user_id = 5;
+        string user_id = 4;
     }
     repeated Item uploaders = 1;
 }

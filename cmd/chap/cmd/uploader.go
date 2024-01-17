@@ -35,7 +35,7 @@ func (cmd *uploaderCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.C
 	var err error
 	uploaderIDs := args
 	if len(uploaderIDs) == 0 {
-		ups, err := cli.ListUploaders(ctx, conf.StorageGroupID(""))
+		ups, err := cli.ListUploaders(ctx)
 		if err != nil {
 			return err
 		}

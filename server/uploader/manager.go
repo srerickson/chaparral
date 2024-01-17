@@ -11,39 +11,24 @@ import (
 )
 
 type Manager struct {
-	roots     map[string]Root
+	fs        ocfl.WriteFS
+	dir       string
 	uploaders map[string]*Uploader
 	persist   Persistence
 	mx        sync.Mutex
 }
 
-func NewManager(roots []Root, persist Persistence) *Manager {
+func NewManager(fsys ocfl.WriteFS, dir string, persist Persistence) *Manager {
 	mgr := &Manager{
-		roots:   make(map[string]Root, len(roots)),
+		fs:      fsys,
+		dir:     dir,
 		persist: persist,
-	}
-	for _, root := range roots {
-		mgr.roots[root.ID] = root
 	}
 	return mgr
 }
 
-type Root struct {
-	ID  string
-	FS  ocfl.WriteFS
-	Dir string
-}
-
-func (mgr *Manager) Root(id string) Root {
-	return mgr.roots[id]
-}
-
-func (mgr *Manager) Roots() []string {
-	ids := make([]string, 0, len(mgr.roots))
-	for id := range mgr.roots {
-		ids = append(ids, id)
-	}
-	return ids
+func (mgr *Manager) Root() (ocfl.WriteFS, string) {
+	return mgr.fs, mgr.dir
 }
 
 func (mgr *Manager) NewUploader(ctx context.Context, config *Config) (string, error) {
