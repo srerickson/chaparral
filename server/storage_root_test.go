@@ -53,7 +53,7 @@ func TestStorageRoot(t *testing.T) {
 	stage := ocfl.NewStage(srcObj.Alg)
 	stage.State = srcObj.State
 	stage.FS = srcObj.FS
-	stage.Root = srcObj.Root
+	stage.Root = srcObj.Path
 	err = stage.UnsafeSetManifestFixty(srcObj.Manifest, srcObj.Fixity)
 	be.NilErr(t, err)
 

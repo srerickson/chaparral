@@ -36,6 +36,8 @@ import (
 var configFile = flag.String("c", "", "config file")
 
 type config struct {
+	// TODO: add Backends field: a map of backend IDs to Backend config. Allow
+	// Roots to specify a backend by its ID. Uploader should also specify a backend.
 	Backend string `fig:"backend" default:"file://."`
 	Roots   []root `fig:"roots"`
 	Uploads string `fig:"uploads" default:"uploads"`
@@ -99,25 +101,25 @@ func main() {
 		logger.Error(fmt.Sprintf("initializing storage group: %v", err))
 		os.Exit(1)
 	}
-	for _, rootConig := range conf.Roots {
+	for _, rootConfig := range conf.Roots {
 		switch {
-		case rootConig.NoInit:
-			if err := defaultGrp.AddStorageRoot(rootConig.ID, rootConig.Path); err != nil {
+		case rootConfig.NoInit:
+			if err := defaultGrp.AddStorageRoot(rootConfig.ID, rootConfig.Path); err != nil {
 				logger.Error(fmt.Sprintf("can't use OCFL Root: %v", err))
 				os.Exit(1)
 			}
 		default:
-			layout, err := extension.Get(rootConig.Init.Layout)
+			layout, err := extension.Get(rootConfig.Init.Layout)
 			if err != nil {
 				logger.Error(fmt.Sprintf("invalid config for OCFL root: %v", err))
 				os.Exit(1)
 			}
 			config := &ocflv1.InitStoreConf{
 				Layout:      layout.(extension.Layout),
-				Description: rootConig.Init.Description,
+				Description: rootConfig.Init.Description,
 				Spec:        ocfl.Spec1_1,
 			}
-			if err := defaultGrp.InitStorageRoot(context.Background(), rootConig.ID, rootConig.Path, config); err != nil {
+			if err := defaultGrp.InitStorageRoot(context.Background(), rootConfig.ID, rootConfig.Path, config); err != nil {
 				logger.Error(fmt.Sprintf("initializing default OCFL Root: %v", err))
 				os.Exit(1)
 			}

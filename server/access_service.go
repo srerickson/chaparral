@@ -147,7 +147,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 		defer obj.Close()
-		objectRoot = obj.Root
+		objectRoot = obj.Path
 		if p := obj.Manifest.DigestPaths(digest); len(p) > 0 {
 			contentPath = p[0]
 		}

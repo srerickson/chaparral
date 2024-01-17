@@ -83,7 +83,7 @@ func (store *StorageRoot) ResolveID(id string) (string, error) {
 // ObjectState represent an OCFL Object with a specific version state.
 type ObjectState struct {
 	FS       ocfl.FS
-	Root     string
+	Path     string
 	ID       string
 	Version  int
 	Head     int
@@ -109,6 +109,7 @@ func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v
 	if err != nil {
 		return nil, err
 	}
+
 	o, err := store.base.GetObject(ctx, objectID)
 	if err != nil {
 		unlock()
@@ -119,7 +120,7 @@ func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v
 	}
 	obj := ObjectState{
 		FS:       o.ObjectRoot.FS,
-		Root:     o.ObjectRoot.Path,
+		Path:     o.ObjectRoot.Path,
 		ID:       o.Inventory.ID,
 		Alg:      o.Inventory.DigestAlgorithm,
 		Spec:     o.Inventory.Type.Spec,
