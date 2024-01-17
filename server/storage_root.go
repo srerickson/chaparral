@@ -24,10 +24,12 @@ var (
 
 // StorageRoot represent an existing OCFL Storage Root in a Group
 type StorageRoot struct {
+	id      string
+	backend Backend
+	fs      ocfl.WriteFS
 	base    *ocflv1.Store
 	baseErr error
-	group   *StorageGroup // group that the storage root is part of
-	path    string        // path for the storage group within the storage group
+	path    string // path for storage root in backend
 	locker  *lock.Locker
 	once    sync.Once // initialize base
 }
@@ -40,24 +42,32 @@ type StorageInitializer struct {
 	//LayoutConfig map[string]any `json:"layout_config,omitempty"`
 }
 
-func NewStorageRoot(group *StorageGroup, path string) *StorageRoot {
+func NewStorageRoot(id string, backend Backend, path string) *StorageRoot {
 	return &StorageRoot{
-		group:  group,
-		path:   path,
-		locker: lock.NewLocker(objectMgrCap),
+		id:      id,
+		backend: backend,
+		path:    path,
+		locker:  lock.NewLocker(objectMgrCap),
 	}
 }
 
 func (store *StorageRoot) Ready(ctx context.Context) error {
 	store.once.Do(func() {
-		store.base, store.baseErr = ocflv1.GetStore(ctx, store.group.fs, store.path)
+		store.fs, store.baseErr = store.backend.NewFS()
+		if store.baseErr != nil {
+			return
+		}
+		store.base, store.baseErr = ocflv1.GetStore(ctx, store.fs, store.path)
 	})
 	return store.baseErr
 }
 
-func (store *StorageRoot) Group() *StorageGroup { return store.group }
-func (store *StorageRoot) FS() ocfl.WriteFS     { return store.group.fs }
-func (store *StorageRoot) Path() string         { return store.path }
+func (store *StorageRoot) FS() ocfl.WriteFS {
+	fs, _ := store.base.Root()
+	return fs.(ocfl.WriteFS)
+}
+
+func (store *StorageRoot) Path() string { return store.path }
 
 func (store *StorageRoot) Description() string {
 	if store.base != nil {

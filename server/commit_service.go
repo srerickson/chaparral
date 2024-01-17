@@ -58,12 +58,12 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 	commitCtx := context.WithoutCancel(ctx)
 	authUser := AuthUserFromCtx(ctx)
 	logger := LoggerFromCtx(ctx).With(
-		QueryGroupID, req.Msg.GroupId,
+		// QueryGroupID, req.Msg.GroupId,
 		QueryStorageRoot, req.Msg.StorageRootId,
 		QueryObjectID, req.Msg.ObjectId,
 		"user_id", authUser.ID,
 	)
-	store, err := s.storageRoot(req.Msg.GroupId, req.Msg.StorageRootId)
+	store, err := s.storageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}

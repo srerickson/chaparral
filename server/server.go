@@ -13,7 +13,7 @@ import (
 
 // chaparral represents complete chaparral server state.
 type chaparral struct {
-	storeGrps map[string]*StorageGroup
+	roots     map[string]*StorageRoot
 	auth      Authorizer
 	uploadMgr *uploader.Manager
 }
@@ -55,16 +55,18 @@ func New(opts ...Option) *chi.Mux {
 // Option is used to configure the server mux created with New
 type Option func(*config)
 
-func WithStorageGroups(groups ...*StorageGroup) Option {
+func WithStorageGroups(groups ...*StorageRoot) Option {
 	return func(c *config) {
-		c.storeGrps = make(map[string]*StorageGroup, len(groups))
-		c.uploadRoots = []uploader.Root{}
+		c.roots = make(map[string]*StorageRoot, len(groups))
 		for _, g := range groups {
-			c.storeGrps[g.ID()] = g
-			if uproot := g.UploadRoot(); uproot != nil {
-				c.uploadRoots = append(c.uploadRoots, *uproot)
-			}
+			c.roots[g.id] = g
 		}
+	}
+}
+
+func WithUploader() Option {
+	return func(c *config) {
+		c.uploadRoots = []uploader.Root{}
 	}
 }
 
@@ -116,14 +118,9 @@ func (c *chaparral) Close() error {
 	return nil
 }
 
-func (c *chaparral) storageRoot(groupID, rootID string) (*StorageRoot, error) {
-	group := c.storeGrps[groupID]
-	if group == nil {
-		return nil, fmt.Errorf("storage root %q in group %q: %w", rootID, groupID, ErrStorageRootNotFound)
+func (c *chaparral) storageRoot(id string) (*StorageRoot, error) {
+	if r := c.roots[id]; r != nil {
+		return r, nil
 	}
-	root, err := group.StorageRoot(rootID)
-	if err != nil {
-		return nil, fmt.Errorf("storage root %q in group %q: %w", rootID, groupID, err)
-	}
-	return root, nil
+	return nil, fmt.Errorf("unknown storage root: %q", id)
 }
