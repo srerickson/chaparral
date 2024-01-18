@@ -50,7 +50,6 @@ func TestAccessServiceHandler(t *testing.T) {
 		chap := chaparralv1connect.NewAccessServiceClient(httpClient, srv.URL)
 		ctx := context.Background()
 		req := connect.NewRequest(&chaparralv1.GetObjectStateRequest{
-			GroupId:       group.ID(),
 			StorageRootId: storeID,
 			ObjectId:      objectID,
 		})

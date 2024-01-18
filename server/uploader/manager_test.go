@@ -37,10 +37,7 @@ func TestManager(t *testing.T) {
 	fileBack := testutil.FileBackend(t)
 	fsys, err := fileBack.NewFS()
 	be.NilErr(t, err)
-	roots := []uploader.Root{
-		{ID: "fs-root1", FS: fsys, Dir: "root1"},
-		{ID: "fs-root2", FS: fsys, Dir: "root2"},
-	}
+
 	if testutil.WithS3() {
 		s3Back := testutil.S3Backend(t)
 		fsys, err = s3Back.NewFS()
@@ -56,7 +53,6 @@ func TestManager(t *testing.T) {
 		t.Run(uploadRootID, func(t *testing.T) {
 			t.Parallel()
 			uploaderID, err := mgr.NewUploader(ctx, &uploader.Config{
-				RootID:      uploadRootID,
 				UserID:      user,
 				Algs:        algs,
 				Description: desc,
@@ -65,7 +61,6 @@ func TestManager(t *testing.T) {
 			size, err := mgr.Len(ctx)
 			be.NilErr(t, err)
 			be.Nonzero(t, size)
-			slices.Contains(mgr.Roots(), uploadRootID)
 			testManagerUploaders(t, mgr, uploaderID)
 		})
 	}

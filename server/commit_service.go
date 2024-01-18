@@ -237,7 +237,7 @@ func (s *CommitService) NewUploader(ctx context.Context, req *connect.Request[ch
 		UserId:           config.UserID,
 		Description:      config.Description,
 		DigestAlgorithms: config.Algs,
-		UploadPath:       uploadPath(req.Msg.GroupId, id),
+		UploadPath:       uploadPath(id),
 		Created:          timestamppb.New(newUp.Created()),
 	}
 	return connect.NewResponse(resp), nil
@@ -261,7 +261,7 @@ func (s *CommitService) GetUploader(ctx context.Context, req *connect.Request[ch
 		Description:      config.Description,
 		DigestAlgorithms: config.Algs,
 		UserId:           config.UserID,
-		UploadPath:       uploadPath(upper.Config().RootID, req.Msg.UploaderId),
+		UploadPath:       uploadPath(req.Msg.UploaderId),
 	}
 	uploads := upper.Uploads()
 	resp.Uploads = make([]*chaparralv1.GetUploaderResponse_Upload, len(uploads))
@@ -423,11 +423,8 @@ func (s *CommitService) AuthorizeInterceptor() connect.UnaryInterceptorFunc {
 	}
 }
 
-func uploadPath(groupID, uploadID string) string {
+func uploadPath(uploadID string) string {
 	params := url.Values{QueryUploaderID: {uploadID}}
-	if groupID != "" {
-		params[QueryGroupID] = []string{groupID}
-	}
 	return RouteUpload + "?" + params.Encode()
 }
 

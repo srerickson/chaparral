@@ -53,7 +53,7 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
-	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.GroupId, req.Msg.StorageRootId) {
+	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
 		err = errors.New("you don't have permission to read from the storage root")
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
@@ -67,7 +67,6 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 	}
 	defer obj.Close()
 	resp := &chaparralv1.GetObjectStateResponse{
-		GroupId:         req.Msg.GroupId,
 		StorageRootId:   req.Msg.StorageRootId,
 		ObjectId:        obj.ID,
 		DigestAlgorithm: obj.Alg,
@@ -89,7 +88,6 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		err         error
 		objectRoot  string
 		ctx         = r.Context()
-		groupID     = r.URL.Query().Get(QueryGroupID)
 		storeID     = r.URL.Query().Get(QueryStorageRoot)
 		objectID    = r.URL.Query().Get(QueryObjectID)
 		digest      = r.URL.Query().Get(QueryDigest)
@@ -116,7 +114,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	if srv.auth != nil && !srv.auth.RootActionAllowed(ctx, &user, ReadAction, groupID, storeID) {
+	if srv.auth != nil && !srv.auth.RootActionAllowed(ctx, &user, ReadAction, storeID) {
 		w.WriteHeader(http.StatusUnauthorized)
 		err = errors.New("you don't have permission to download from the storage root")
 		return

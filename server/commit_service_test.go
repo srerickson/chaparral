@@ -110,7 +110,6 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, s
 	}
 	uploaderID := newUpResp.Msg.UploaderId
 	uploaderPath := newUpResp.Msg.UploadPath
-	uploaderGroup := newUpResp.Msg.GroupId
 	// concurrent uploads of 2MB random data.
 	times := 3
 	wg := sync.WaitGroup{}
@@ -172,9 +171,7 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, s
 	}
 	wg.Wait()
 	// list the uploaders
-	listUpResp, err := chapClient.ListUploaders(ctx, connect.NewRequest(&chapv1.ListUploadersRequest{
-		GroupId: uploaderGroup,
-	}))
+	listUpResp, err := chapClient.ListUploaders(ctx, connect.NewRequest(&chapv1.ListUploadersRequest{}))
 	if !nilErr(t, err) {
 		return
 	}

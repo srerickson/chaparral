@@ -1,13 +1,12 @@
 -- name: CreateUploader :one
 INSERT INTO uploaders (
     id, 
-    root_id,
     user_id,
     algs,
     description,
     created_at
 ) VALUES (
-    ?, ?, ?, ?, ?, ?
+    ?, ?, ?, ?, ?
 ) RETURNING *;
 
 
