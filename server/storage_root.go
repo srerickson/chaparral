@@ -56,7 +56,8 @@ func (store *StorageRoot) Ready(ctx context.Context) error {
 		if store.baseErr == nil || store.init == nil {
 			return
 		}
-		// try to initislize the storage root
+		store.baseErr = nil
+		// try to initialize the storage root
 		layout := defaultLayout
 		if store.init.Layout != "" {
 			l, err := extension.Get(store.init.Layout)
@@ -75,6 +76,7 @@ func (store *StorageRoot) Ready(ctx context.Context) error {
 			store.baseErr = err
 			return
 		}
+		store.base, store.baseErr = ocflv1.GetStore(ctx, store.fs, store.path)
 	})
 	return store.baseErr
 }

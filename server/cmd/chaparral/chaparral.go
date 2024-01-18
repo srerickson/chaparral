@@ -23,6 +23,7 @@ import (
 	"github.com/srerickson/chaparral/server"
 	"github.com/srerickson/chaparral/server/backend"
 	"github.com/srerickson/chaparral/server/chapdb"
+	"github.com/srerickson/chaparral/server/uploader"
 
 	"github.com/go-chi/httplog/v2"
 	"github.com/kkyr/fig"
@@ -123,12 +124,19 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
+	chapDB := (*chapdb.DB)(db)
+
+	var mgr *uploader.Manager
+	if conf.Uploads != "" {
+		mgr = uploader.NewManager(fsys, conf.Uploads, chapDB)
+	}
 
 	//mgr := uploader.NewManager()
 
 	defer db.Close()
 	mux := server.New(
 		server.WithStorageRoots(roots...),
+		server.WithUploaderManager(mgr),
 		server.WithLogger(logger.Logger),
 		server.WithAuthUserFunc(server.DefaultAuthUserFunc(&authKey.PublicKey)),
 		server.WithAuthorizer(server.DefaultPermissions()),

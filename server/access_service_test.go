@@ -3,6 +3,7 @@ package server_test
 import (
 	"context"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"path"
@@ -106,16 +107,12 @@ func TestAccessServiceHandler(t *testing.T) {
 		}
 		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
-		if err != nil {
-			t.Fatal("http client error:", err)
-		}
+		be.NilErr(t, err)
 		defer resp.Body.Close()
-		if resp.StatusCode != 404 {
-			t.Fatalf("Get(%q): expected=400, got status=%d", u, resp.StatusCode)
-		}
+		be.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
 
-	t.Run("download missing", func(t *testing.T) {
+	t.Run("download missing content", func(t *testing.T) {
 		vals := url.Values{
 			server.QueryContentPath: {"nothing"},
 			server.QueryObjectID:    {objectID},
@@ -123,12 +120,21 @@ func TestAccessServiceHandler(t *testing.T) {
 		}
 		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
-		if err != nil {
-			t.Fatal("http client error:", err)
-		}
+		be.NilErr(t, err)
 		defer resp.Body.Close()
-		if resp.StatusCode != 404 {
-			t.Fatalf("Get(%q): expected=400, got status=%d", u, resp.StatusCode)
+		be.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
+
+	t.Run("download missing digest", func(t *testing.T) {
+		vals := url.Values{
+			server.QueryDigest:      {"nothing"},
+			server.QueryObjectID:    {objectID},
+			server.QueryStorageRoot: {storeID},
 		}
+		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
+		resp, err := httpClient.Get(u)
+		be.NilErr(t, err)
+		defer resp.Body.Close()
+		be.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
 }

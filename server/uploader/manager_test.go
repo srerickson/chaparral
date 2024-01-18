@@ -28,8 +28,6 @@ var algs = []string{ocfl.SHA256, ocfl.MD5}
 
 func TestManager(t *testing.T) {
 	ctx := context.Background()
-
-	// persist uploaders to sqlite file
 	tmpDir := t.TempDir()
 	db, err := chapdb.Open("sqlite3", filepath.Join(tmpDir, "db.sqlite"), true)
 	be.NilErr(t, err)
@@ -37,33 +35,17 @@ func TestManager(t *testing.T) {
 	fileBack := testutil.FileBackend(t)
 	fsys, err := fileBack.NewFS()
 	be.NilErr(t, err)
-
-	if testutil.WithS3() {
-		s3Back := testutil.S3Backend(t)
-		fsys, err = s3Back.NewFS()
-		be.NilErr(t, err)
-		roots = append(roots, []uploader.Root{
-			{ID: "s3-root1", FS: fsys, Dir: "root1"},
-			{ID: "s3-root2", FS: fsys, Dir: "root2"},
-		}...)
-	}
-	mgr := uploader.NewManager(roots, persist)
-	for _, id := range mgr.Roots() {
-		uploadRootID := id
-		t.Run(uploadRootID, func(t *testing.T) {
-			t.Parallel()
-			uploaderID, err := mgr.NewUploader(ctx, &uploader.Config{
-				UserID:      user,
-				Algs:        algs,
-				Description: desc,
-			})
-			be.NilErr(t, err)
-			size, err := mgr.Len(ctx)
-			be.NilErr(t, err)
-			be.Nonzero(t, size)
-			testManagerUploaders(t, mgr, uploaderID)
-		})
-	}
+	mgr := uploader.NewManager(fsys, "uploads", persist)
+	uploaderID, err := mgr.NewUploader(ctx, &uploader.Config{
+		UserID:      user,
+		Algs:        algs,
+		Description: desc,
+	})
+	be.NilErr(t, err)
+	size, err := mgr.Len(ctx)
+	be.NilErr(t, err)
+	be.Nonzero(t, size)
+	testManagerUploaders(t, mgr, uploaderID)
 }
 
 func testManagerUploaders(t *testing.T, mgr *uploader.Manager, uploaderID string) {

@@ -20,6 +20,7 @@ import (
 	"github.com/srerickson/chaparral/server"
 	"github.com/srerickson/chaparral/server/backend"
 	"github.com/srerickson/chaparral/server/chapdb"
+	"github.com/srerickson/chaparral/server/uploader"
 	"github.com/srerickson/ocfl-go/backend/local"
 	"github.com/srerickson/ocfl-go/extension"
 )
@@ -51,7 +52,10 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 		}
 		defer db.Close()
 		root := MkGroupTempDir(t)
-		mux := server.New(append(opts, server.WithStorageRoots(root))...)
+		mgr := uploader.NewManager(root.FS(), "uploads", (*chapdb.SQLiteDB)(db))
+		mux := server.New(append(opts,
+			server.WithStorageRoots(root),
+			server.WithUploaderManager(mgr))...)
 		testSrv := httptest.NewTLSServer(mux)
 		testCli := testSrv.Client()
 		authorizeClient(testSrv.Client(), AdminUser)

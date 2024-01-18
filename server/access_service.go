@@ -172,7 +172,11 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	// content path relative to group's FS
 	f, err := store.FS().OpenFile(ctx, fullPath)
 	if err != nil {
-		logger.Error(err.Error())
+		if errors.Is(err, fs.ErrNotExist) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		logger.Error("during uploader: " + err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

@@ -57,7 +57,7 @@ func WithStorageRoots(roots ...*StorageRoot) Option {
 	}
 }
 
-func WithUploader(mgr *uploader.Manager) Option {
+func WithUploaderManager(mgr *uploader.Manager) Option {
 	return func(c *config) {
 		c.chaparral.uploadMgr = mgr
 	}

@@ -161,7 +161,7 @@ func (p Permissions) ActionAllowed(_ context.Context, user *AuthUser, action str
 	}
 	return slices.ContainsFunc(roles, func(r string) bool {
 		return slices.ContainsFunc(p[r], func(rp RolePermission) bool {
-			return slices.Contains(rp.Actions, action)
+			return rp.allowAction(action)
 		})
 	})
 }
