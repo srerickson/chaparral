@@ -54,7 +54,6 @@ func (pull *pullCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Conf
 	if err != nil && !errors.Is(err, cfg.ErrNotProject) {
 		return err
 	}
-	err = nil
 	objectID = cfg.First(pull.objectID, proj.ObjectID)
 	rootID = conf.StorageRootID(proj.StorageRootID)
 	dstDir = cfg.First(dstDir, proj.Path())

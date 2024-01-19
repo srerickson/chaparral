@@ -2,16 +2,26 @@ package chaparral
 
 import "runtime/debug"
 
-const VERSION = "0.0.0-dev"
+var VERSION = "devel"
 
-var Commit = func() string {
+var CODE_VERSION = func() string {
 	if info, ok := debug.ReadBuildInfo(); ok {
+		revision := ""
+		// revtime := ""
+		localmods := false
 		for _, setting := range info.Settings {
-			if setting.Key == "vcs.revision" {
-				return setting.Value
+			switch setting.Key {
+			case "vcs.revision":
+				revision = setting.Value
+			// case "vcs.time":
+			// 	revtime = setting.Value
+			case "vcs.modified":
+				localmods = setting.Value == "true"
 			}
 		}
+		if !localmods {
+			return revision
+		}
 	}
-
-	return ""
+	return "none"
 }()

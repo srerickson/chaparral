@@ -13,6 +13,7 @@ import (
 var sqliteMigrations embed.FS
 
 func Migrate(db *sql.DB) error {
+	goose.SetLogger(goose.NopLogger())
 	goose.SetBaseFS(sqliteMigrations)
 	switch db.Driver().(type) {
 	case *sqlite3.SQLiteDriver:

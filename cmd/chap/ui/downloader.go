@@ -38,7 +38,6 @@ type Downloader struct {
 	Concurrency int // number of simultaneous downloads
 
 	cli      *client.Client
-	groupID  string
 	rootID   string
 	objectID string
 

@@ -31,7 +31,9 @@ func TestGetProject(t *testing.T) {
 	cwd, err := os.Getwd()
 	be.NilErr(t, err)
 	be.NilErr(t, os.Chdir(subDir))
-	defer os.Chdir(cwd)
+	defer func() {
+		_ = os.Chdir(cwd)
+	}()
 	p, err := config.SearchProject("")
 	be.NilErr(t, err)
 	// convert to path without symlinks, if necessary

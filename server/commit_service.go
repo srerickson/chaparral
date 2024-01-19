@@ -104,6 +104,10 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			"uploader_id", src.Uploader.UploaderId,
 		)
 		logger.Debug("commit from uploader")
+		if s.uploadMgr == nil {
+			err := errors.New("the server does not support uploads")
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
 		upper, err := s.uploadMgr.GetUploader(ctx, uploaderID)
 		if err != nil {
 			err = fmt.Errorf("getting uploader %q: %w", src.Uploader.UploaderId, err)
@@ -215,7 +219,7 @@ func (s *CommitService) NewUploader(ctx context.Context, req *connect.Request[ch
 		Algs:        req.Msg.DigestAlgorithms,
 	}
 	if s.uploadMgr == nil {
-		err := errors.New("the storage root does not allow uploading")
+		err := errors.New("the server does not allow uploading")
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 	id, err := s.uploadMgr.NewUploader(ctx, uploaderConfig)
@@ -248,6 +252,10 @@ func (s *CommitService) NewUploader(ctx context.Context, req *connect.Request[ch
 
 func (s *CommitService) GetUploader(ctx context.Context, req *connect.Request[chaparralv1.GetUploaderRequest]) (*connect.Response[chaparralv1.GetUploaderResponse], error) {
 	logger := LoggerFromCtx(ctx)
+	if s.uploadMgr == nil {
+		err := errors.New("the storage root does not allow uploading")
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	upper, err := s.uploadMgr.GetUploader(ctx, req.Msg.UploaderId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
@@ -279,6 +287,10 @@ func (s *CommitService) GetUploader(ctx context.Context, req *connect.Request[ch
 
 func (s *CommitService) ListUploaders(ctx context.Context, req *connect.Request[chaparralv1.ListUploadersRequest]) (*connect.Response[chaparralv1.ListUploadersResponse], error) {
 	logger := LoggerFromCtx(ctx)
+	if s.uploadMgr == nil {
+		err := errors.New("the storage root does not allow uploading")
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	ids, err := s.uploadMgr.UploaderIDs(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -319,6 +331,10 @@ func (s *CommitService) DeleteUploader(ctx context.Context, req *connect.Request
 	logger := LoggerFromCtx(ctx).With(QueryUploaderID, req.Msg.UploaderId)
 	// don't cancel context if client disconnects.
 	noCancelCtx := context.WithoutCancel(ctx)
+	if s.uploadMgr == nil {
+		err := errors.New("the storage root does not allow uploading")
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	upper, err := s.uploadMgr.GetUploader(ctx, req.Msg.UploaderId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -356,6 +372,10 @@ func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	if s.auth != nil && !s.auth.ActionAllowed(ctx, &user, CommitAction) {
 		w.WriteHeader(http.StatusUnauthorized)
 		result.Err = "you don't have permission to upload files"
+		return
+	}
+	if s.uploadMgr == nil {
+		result.Err = "the storage root does not allow uploading"
 		return
 	}
 	upper, err := s.uploadMgr.GetUploader(ctx, uploaderID)

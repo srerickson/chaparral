@@ -54,7 +54,6 @@ func (get *getCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Config
 	if err != nil && !errors.Is(err, cfg.ErrNotProject) {
 		return err
 	}
-	err = nil
 	switch len(args) {
 	case 0:
 		return errors.New("missing required argument: path of object file to download")

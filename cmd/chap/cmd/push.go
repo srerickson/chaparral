@@ -67,7 +67,6 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 	if err != nil && !errors.Is(err, cfg.ErrNotProject) {
 		return err
 	}
-	err = nil
 	store = conf.StorageRootID(proj.StorageRootID)
 	objectID = cfg.First(push.objectID, proj.ObjectID)
 	srcDir = cfg.First(srcDir, proj.Path())

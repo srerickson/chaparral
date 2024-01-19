@@ -3,7 +3,7 @@ package server
 import (
 	"context"
 	"errors"
-	"strings"
+	"fmt"
 	"sync"
 	"time"
 
@@ -26,15 +26,16 @@ var (
 // StorageRoot represent an existing OCFL Storage Root
 type StorageRoot struct {
 	id      string
-	fs      ocfl.WriteFS
-	base    *ocflv1.Store
-	baseErr error
-	path    string // path for storage root in backend
+	fs      ocfl.WriteFS  // backend
+	path    string        // path for storage root in fs
+	base    *ocflv1.Store // OCFL storage root
+	baseErr error         // error loading OCFL storage root
 	locker  *lock.Locker
 	init    *StorageInitializer
 	once    sync.Once // initialize base
 }
 
+// StorageInitializer is used to configure new storage roots that don't exist
 type StorageInitializer struct {
 	Description string `json:"description,omitempty"`
 	Layout      string `json:"layout,omitempty"`
@@ -83,6 +84,9 @@ func (store *StorageRoot) Ready(ctx context.Context) error {
 }
 
 func (store *StorageRoot) FS() ocfl.WriteFS {
+	if store.base == nil {
+		return nil
+	}
 	fs, _ := store.base.Root()
 	return fs.(ocfl.WriteFS)
 }
@@ -99,10 +103,10 @@ func (store *StorageRoot) Description() string {
 }
 
 func (store *StorageRoot) Spec() ocfl.Spec {
-	if store.base != nil {
-		return store.base.Spec()
+	if store.base == nil {
+		return ocfl.Spec{}
 	}
-	return ocfl.Spec{}
+	return store.base.Spec()
 }
 
 func (store *StorageRoot) ResolveID(id string) (string, error) {
@@ -127,13 +131,18 @@ type ObjectState struct {
 	User     *ocfl.User
 	Created  time.Time
 	Fixity   map[string]ocfl.DigestMap
-	Close    func()
+	close    func()
 }
 
-// GetObjectState returns an Object reference that supports concurrent access.
+func (objState *ObjectState) Close() error {
+	objState.close()
+	return nil
+}
+
+// GetObjectState returns an ObjectState that supports concurrent access.
 // Commits to objectID will fail until the Close() is called on the returned
 // Object.
-func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v int) (*ObjectState, error) {
+func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, verIndex int) (*ObjectState, error) {
 	if err := store.Ready(ctx); err != nil {
 		return nil, err
 	}
@@ -141,38 +150,36 @@ func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v
 	if err != nil {
 		return nil, err
 	}
-
-	o, err := store.base.GetObject(ctx, objectID)
+	obj, err := store.base.GetObject(ctx, objectID)
 	if err != nil {
 		unlock()
 		return nil, err
 	}
-	if v == 0 {
-		v = o.Inventory.Head.Num()
+	if verIndex == 0 {
+		verIndex = obj.Inventory.Head.Num()
 	}
-	obj := ObjectState{
-		FS:       o.ObjectRoot.FS,
-		Path:     o.ObjectRoot.Path,
-		ID:       o.Inventory.ID,
-		Alg:      o.Inventory.DigestAlgorithm,
-		Spec:     o.Inventory.Type.Spec,
-		Head:     o.Inventory.Head.Num(),
-		Manifest: o.Inventory.Manifest,
-		Fixity:   o.Inventory.Fixity,
-		Version:  v,
-		Close:    unlock,
-	}
-	ver := o.Inventory.GetVersion(v)
-	if ver == nil {
+	version := obj.Inventory.GetVersion(verIndex)
+	if version == nil {
 		unlock()
-		return nil, errors.New("version not found")
+		return nil, fmt.Errorf("version index %d not found", verIndex)
 	}
-	obj.State = ver.State
-	obj.Message = ver.Message
-	obj.User = ver.User
-	obj.Created = ver.Created
-	// must call Close() on the returned Object.
-	return &obj, nil
+	objState := ObjectState{
+		FS:       obj.ObjectRoot.FS,
+		Path:     obj.ObjectRoot.Path,
+		ID:       obj.Inventory.ID,
+		Alg:      obj.Inventory.DigestAlgorithm,
+		Spec:     obj.Inventory.Type.Spec,
+		Head:     obj.Inventory.Head.Num(),
+		Manifest: obj.Inventory.Manifest,
+		Fixity:   obj.Inventory.Fixity,
+		Version:  verIndex,
+		State:    version.State,
+		Message:  version.Message,
+		User:     version.User,
+		Created:  version.Created,
+		close:    unlock,
+	}
+	return &objState, nil
 }
 
 func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *ocfl.Stage, opts ...ocflv1.CommitOption) error {
@@ -240,17 +247,3 @@ func (store *StorageRoot) Validate(ctx context.Context, opts ...ocflv1.Validatio
 //		}
 //		return pipeline.Run(setupFn, workFn, resultFn, concurrency)
 //	}
-
-func pathConflict(paths ...string) bool {
-	for i, a := range paths {
-		for _, b := range paths[i+1:] {
-			if a == b {
-				return true
-			}
-			if a == "." || b == "." || strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
-				return true
-			}
-		}
-	}
-	return false
-}

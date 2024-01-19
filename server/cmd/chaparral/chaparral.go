@@ -34,11 +34,9 @@ import (
 var configFile = flag.String("c", "", "config file")
 
 type config struct {
-	// TODO: add Backends field: a map of backend IDs to Backend config. Allow
-	// Roots to specify a backend by its ID. Uploader should also specify a backend.
 	Backend string `fig:"backend" default:"file://."`
 	Roots   []root `fig:"roots"`
-	Uploads string `fig:"uploads" default:"uploads"`
+	Uploads string `fig:"uploads"`
 	Listen  string `fig:"listen"`
 	StateDB string `fig:"db" default:"chaparral.sqlite3"`
 	AuthPEM string `fig:"auth_pem" default:"chaparral.pem"`
@@ -97,7 +95,8 @@ func main() {
 	if ok, err := backend.IsAccessible(); !ok {
 		logger.Error(fmt.Sprintf("backend not accessible: %v", err), "storage", conf.Backend)
 	}
-	roots := []*server.StorageRoot{}
+	var rootPaths []string
+	var roots []*server.StorageRoot
 	for _, rootConfig := range conf.Roots {
 		var init *server.StorageInitializer
 		if rootConfig.Init != nil {
@@ -108,32 +107,37 @@ func main() {
 		}
 		r := server.NewStorageRoot(rootConfig.ID, fsys, rootConfig.Path, init)
 		roots = append(roots, r)
+		rootPaths = append(rootPaths, rootConfig.Path)
 	}
 
-	if conf.Uploads != "" {
-		// TODO
-	}
 	// authentication config (load RSA key used in JWS signing)
 	authKey, err := loadRSAKey(conf.AuthPEM)
 	if err != nil {
 		logger.Error("error loading auth keyfile", "error", err.Error())
 		os.Exit(1)
 	}
+	// sqlite3 for server state
 	db, err := chapdb.Open("sqlite3", conf.StateDB, true)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
+	defer db.Close()
 	chapDB := (*chapdb.SQLiteDB)(db)
 
+	// upload manager is required for allowing uploads
 	var mgr *uploader.Manager
 	if conf.Uploads != "" {
 		mgr = uploader.NewManager(fsys, conf.Uploads, chapDB)
+		rootPaths = append(rootPaths, conf.Uploads)
 	}
 
-	//mgr := uploader.NewManager()
+	if pathConflict(rootPaths...) {
+		err := fmt.Errorf("storage root and uploader paths have conflicts: %s", strings.Join(rootPaths, ", "))
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
 
-	defer db.Close()
 	mux := server.New(
 		server.WithStorageRoots(roots...),
 		server.WithUploaderManager(mgr),
@@ -165,7 +169,8 @@ func main() {
 	}
 
 	logger.Info("starting server",
-		"code_version", chaparral.Commit,
+		"version", chaparral.VERSION,
+		"code_version", chaparral.CODE_VERSION,
 		"storage", conf.Backend,
 		"root", conf.Roots,
 		"uploads", conf.Uploads,
@@ -203,7 +208,7 @@ func main() {
 		srvErr = httpSrv.ListenAndServe()
 	default:
 		httpSrv.Handler = mux
-		httpSrv.ListenAndServeTLS("", "")
+		srvErr = httpSrv.ListenAndServeTLS("", "")
 	}
 	if errors.Is(http.ErrServerClosed, srvErr) {
 		srvErr = nil
@@ -314,4 +319,18 @@ func newTLSConfig(crt, key, clientCA string) (*tls.Config, error) {
 		}
 	}
 	return tlsCfg, nil
+}
+
+func pathConflict(paths ...string) bool {
+	for i, a := range paths {
+		for _, b := range paths[i+1:] {
+			if a == b {
+				return true
+			}
+			if a == "." || b == "." || strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
+				return true
+			}
+		}
+	}
+	return false
 }

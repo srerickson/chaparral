@@ -181,6 +181,7 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, s
 	_, err = chapClient.DeleteUploader(ctx, connect.NewRequest(&chapv1.DeleteUploaderRequest{
 		UploaderId: uploaderID,
 	}))
+	// FIXME: this test fails sometimes
 	if !nilErr(t, err) {
 		return
 	}

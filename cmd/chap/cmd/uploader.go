@@ -60,7 +60,9 @@ func (cmd *uploaderCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.C
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		enc.Encode(up)
+		if err := enc.Encode(up); err != nil {
+			return err
+		}
 	}
 	return err
 }
