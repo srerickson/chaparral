@@ -74,10 +74,6 @@ func (c Config) UserEmail(custom string) string {
 	return First(custom, c.Global.UserEmail)
 }
 
-func (c Config) StorageGroupID(custom string) string {
-	return First(custom, c.Global.StorageGroupID)
-}
-
 func (c Config) StorageRootID(custom string) string {
 	return First(custom, c.Global.StorageRootID)
 }

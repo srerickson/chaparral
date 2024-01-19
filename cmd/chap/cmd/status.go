@@ -43,14 +43,13 @@ func (diff *statusCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Co
 	var (
 		dir      = proj.Path()
 		objectID = proj.ObjectID
-		group    = proj.StorageGroupID
 		root     = proj.StorageRootID
 	)
 	ui.PrintValues(
 		"local object version", fmt.Sprintf("%s (%d)", proj.ObjectID, proj.Version),
 	)
 
-	head, err := cli.GetObjectState(ctx, group, root, objectID, 0)
+	head, err := cli.GetObjectState(ctx, root, objectID, 0)
 	if err != nil {
 		if client.IsNotFound(err) {
 			fmt.Fprintln(os.Stderr, "Use `push` to upload new object version.")

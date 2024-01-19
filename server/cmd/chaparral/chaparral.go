@@ -124,7 +124,7 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	chapDB := (*chapdb.DB)(db)
+	chapDB := (*chapdb.SQLiteDB)(db)
 
 	var mgr *uploader.Manager
 	if conf.Uploads != "" {

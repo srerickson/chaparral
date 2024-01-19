@@ -50,9 +50,8 @@ func (cmd *initdirCmd) Run(ctx context.Context, conf *cfg.Config, args []string)
 	}
 	// load storage from global, if that's where it's set
 	proj := cfg.Project{
-		ObjectID:       objectID,
-		StorageGroupID: conf.StorageGroupID(cmd.groupID),
-		StorageRootID:  conf.StorageRootID(cmd.rootID),
+		ObjectID:      objectID,
+		StorageRootID: conf.StorageRootID(cmd.rootID),
 	}
 	if err := cfg.InitProject(dir, proj); err != nil {
 		return err

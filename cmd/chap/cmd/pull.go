@@ -39,7 +39,6 @@ type pullCmd struct {
 func (pull *pullCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Config, args []string) error {
 	var (
 		objectID string
-		groupID  string
 		rootID   string
 		dstDir   string
 		proj     cfg.Project
@@ -57,7 +56,6 @@ func (pull *pullCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Conf
 	}
 	err = nil
 	objectID = cfg.First(pull.objectID, proj.ObjectID)
-	groupID = conf.StorageGroupID(proj.StorageGroupID)
 	rootID = conf.StorageRootID(proj.StorageRootID)
 	dstDir = cfg.First(dstDir, proj.Path())
 	if dstDir == "" {
@@ -69,7 +67,7 @@ func (pull *pullCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Conf
 	if !proj.Empty() {
 		ui.PrintValues("local object version", fmt.Sprintf("%s (%d)", proj.ObjectID, proj.Version))
 	}
-	state, err := pull.pullState(ctx, cli, groupID, rootID, objectID, dstDir)
+	state, err := pull.pullState(ctx, cli, rootID, objectID, dstDir)
 	if err != nil {
 		return err
 	}
@@ -84,8 +82,8 @@ func (pull *pullCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Conf
 	return nil
 }
 
-func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, groupID, rootID, objectID, dst string) (*client.ObjectState, error) {
-	remote, err := cli.GetObjectState(ctx, groupID, rootID, objectID, pull.vNum)
+func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, rootID, objectID, dst string) (*client.ObjectState, error) {
+	remote, err := cli.GetObjectState(ctx, rootID, objectID, pull.vNum)
 	if err != nil {
 		return nil, fmt.Errorf("getting object state: %w", err)
 	}
@@ -129,7 +127,7 @@ func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, groupID,
 		dstPath := filepath.Join(dstDir, filepath.FromSlash(fName))
 		files[dstPath] = digest
 	}
-	if err := ui.RunDownload(cli, groupID, rootID, objectID, files, pull.replace); err != nil {
+	if err := ui.RunDownload(cli, rootID, objectID, files, pull.replace); err != nil {
 		return nil, err
 	}
 	return remote, nil

@@ -215,6 +215,7 @@ func (s *CommitService) NewUploader(ctx context.Context, req *connect.Request[ch
 		UserID:      user.ID,
 		Algs:        req.Msg.DigestAlgorithms,
 	}
+	// TODO check nil uploadMgr
 	id, err := s.uploadMgr.NewUploader(ctx, uploaderConfig)
 	if err != nil {
 		logger.Error(err.Error())

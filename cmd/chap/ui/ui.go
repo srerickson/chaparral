@@ -20,9 +20,8 @@ func CommitSummary(commit *client.Commit) string {
 		nameStyle.Render("preparing new object version:"),
 		valueStyle.Render(fmt.Sprintf("%s v%d", commit.ObjectID, commit.Version)),
 	)
-	fmt.Fprintf(b, "%s %s/%s\n",
-		nameStyle.Render("storage root:"),
-		valueStyle.Render(commit.GroupID),
+	fmt.Fprintf(b, "%s: %s\n",
+		nameStyle.Render("storage root"),
 		valueStyle.Render(commit.StorageRootID))
 	return b.String()
 }
@@ -169,11 +168,11 @@ func (m commutUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // Run Bubbletea program for uploading files
-func RunDownload(cli *client.Client, groupID, rootID, object string, files map[string]string, replace bool) error {
+func RunDownload(cli *client.Client, rootID, object string, files map[string]string, replace bool) error {
 	if len(files) == 0 {
 		return nil
 	}
-	m := downloadUI{model: NewDownloader(cli, groupID, rootID, object, files, replace)}
+	m := downloadUI{model: NewDownloader(cli, rootID, object, files, replace)}
 	final, err := tea.NewProgram(m).Run()
 	if err != nil {
 		return err

@@ -30,5 +30,5 @@ func (ls *deleteCmd) Run(ctx context.Context, cli *chap.Client, conf *cfg.Config
 	if len(args) > 0 {
 		objectID = args[0]
 	}
-	return cli.DeleteObject(ctx, conf.StorageGroupID(""), conf.StorageRootID(""), objectID)
+	return cli.DeleteObject(ctx, conf.StorageRootID(""), objectID)
 }

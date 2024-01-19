@@ -16,10 +16,9 @@ var (
 
 type Project struct {
 	// repo/store_path
-	StorageGroupID string `json:"storage_group_id,omitempty"`
-	StorageRootID  string `json:"storage_root_id,omitempty"`
-	ObjectID       string `json:"object_id"`
-	Version        int    `json:"version"`
+	StorageRootID string `json:"storage_root_id,omitempty"`
+	ObjectID      string `json:"object_id"`
+	Version       int    `json:"version"`
 
 	path string // path to the project
 }

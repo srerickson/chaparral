@@ -25,12 +25,11 @@ func init() {
 }
 
 type GlobalConfig struct {
-	ServerURL      string `json:"server_url"`
-	AuthToken      string `json:"auth_token"`
-	StorageGroupID string `json:"storage_group_id,omitempty"`
-	StorageRootID  string `json:"storage_root_id,omitempty"`
-	UserName       string `json:"user_name"`
-	UserEmail      string `json:"user_email"`
+	ServerURL     string `json:"server_url"`
+	AuthToken     string `json:"auth_token"`
+	StorageRootID string `json:"storage_root_id,omitempty"`
+	UserName      string `json:"user_name"`
+	UserEmail     string `json:"user_email"`
 
 	ClientCrt string `json:"client_crt,omitempty"`
 	ClientKey string `json:"client_key,omitempty"`

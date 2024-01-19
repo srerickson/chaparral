@@ -51,7 +51,6 @@ type pushCmd struct {
 
 func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Config, args []string) error {
 	var (
-		group    string
 		store    string
 		objectID string
 		srcDir   string
@@ -69,7 +68,6 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 		return err
 	}
 	err = nil
-	group = conf.StorageGroupID(proj.StorageGroupID)
 	store = conf.StorageRootID(proj.StorageRootID)
 	objectID = cfg.First(push.objectID, proj.ObjectID)
 	srcDir = cfg.First(srcDir, proj.Path())
@@ -82,7 +80,6 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 	if !proj.Empty() {
 		ui.PrintValues("local object version", fmt.Sprintf("%s (%d)", proj.ObjectID, proj.Version))
 	}
-	cmd.Commit.GroupID = group
 	cmd.Commit.StorageRootID = store
 	cmd.Commit.ObjectID = objectID
 	cmd.Commit.User.Address = conf.UserEmail(cmd.Commit.User.Address)
@@ -106,7 +103,7 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *clie
 	// 	return err
 	// }
 	// check commit against existing object for continiuity
-	existing, err := cli.GetObjectState(ctx, com.GroupID, com.StorageRootID, com.ObjectID, 0)
+	existing, err := cli.GetObjectState(ctx, com.StorageRootID, com.ObjectID, 0)
 	if err != nil && !client.IsNotFound(err) {
 		return fmt.Errorf("getting existing object state: %w", err)
 	}
@@ -184,8 +181,8 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *clie
 	}
 	if len(uploadFiles) > 0 && uploader == nil {
 		// try to create new uploader
-		upName := path.Join(com.GroupID, com.StorageRootID, com.ObjectID)
-		uploader, err = cli.NewUploader(ctx, com.GroupID, []string{com.Alg}, upName)
+		upName := path.Join(com.StorageRootID, com.ObjectID)
+		uploader, err = cli.NewUploader(ctx, []string{com.Alg}, upName)
 		if err != nil {
 			return err
 		}

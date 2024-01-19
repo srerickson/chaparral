@@ -52,11 +52,10 @@ type Downloader struct {
 	Canceled bool
 }
 
-func NewDownloader(cli *client.Client, grp, root, object string, files map[string]string, replace bool) Downloader {
+func NewDownloader(cli *client.Client, root, object string, files map[string]string, replace bool) Downloader {
 	return Downloader{
 		Concurrency: runtime.NumCPU(),
 		cli:         cli,
-		groupID:     grp,
 		rootID:      root,
 		objectID:    object,
 		files:       files,
@@ -144,7 +143,7 @@ func downloaderDoneCmd() tea.Msg { return DownloadDoneMsg{} }
 var errSkippedExisting = errors.New("skipped")
 
 func (m *Downloader) saveContent(ctx context.Context, digest, localPath string, replace bool) error {
-	reader, err := m.cli.GetContent(ctx, m.groupID, m.rootID, m.objectID, digest, "")
+	reader, err := m.cli.GetContent(ctx, m.rootID, m.objectID, digest, "")
 	if err != nil {
 		return err
 	}

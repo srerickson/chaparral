@@ -44,8 +44,7 @@ type getCmd struct {
 func (get *getCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Config, args []string) error {
 	var (
 		objectID string
-		group    string = conf.StorageGroupID("")
-		store    string = conf.StorageRootID("")
+		storeID  string = conf.StorageRootID("")
 		srcArg   string // source or content path in object
 		dstArg   string
 		proj     cfg.Project
@@ -72,15 +71,11 @@ func (get *getCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Config
 	if objectID == "" {
 		return errors.New("an object id must be set in a local config or with the '--id' flag")
 	}
-	if group == "" || store == "" {
-		return errors.New("a storage root must be set in a local config or with the '--root' flag")
-	}
-
 	contentPath := srcArg
 	digest := ""
 	if !get.pathIsContent {
 		// objSrcPath is a logical path -- convert it to a content path
-		state, err := cli.GetObjectState(ctx, group, store, objectID, get.version)
+		state, err := cli.GetObjectState(ctx, storeID, objectID, get.version)
 		if err != nil {
 			return err
 		}
@@ -90,11 +85,11 @@ func (get *getCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Config
 			return fmt.Errorf("%s: file not found in %s (%s)", srcArg, objectID, get.Version)
 		}
 	}
-	_, err = getContent(ctx, cli, group, store, objectID, digest, contentPath, dstArg, get.replace)
+	_, err = getContent(ctx, cli, storeID, objectID, digest, contentPath, dstArg, get.replace)
 	return err
 }
 
-func getContent(ctx context.Context, cli *client.Client, repo, storePath, objectID, digest, contentPath, localPath string, replace bool) (int64, error) {
+func getContent(ctx context.Context, cli *client.Client, storeID, objectID, digest, contentPath, localPath string, replace bool) (int64, error) {
 	var writer io.Writer
 	switch localPath {
 	case "-":
@@ -118,7 +113,7 @@ func getContent(ctx context.Context, cli *client.Client, repo, storePath, object
 		defer f.Close()
 		writer = f
 	}
-	reader, err := cli.GetContent(ctx, repo, storePath, objectID, digest, contentPath)
+	reader, err := cli.GetContent(ctx, storeID, objectID, digest, contentPath)
 	if err != nil {
 		return 0, err
 	}
