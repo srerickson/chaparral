@@ -10,6 +10,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/srerickson/chaparral"
+	"github.com/srerickson/chaparral/server"
+	"github.com/srerickson/chaparral/server/backend"
+	"github.com/srerickson/chaparral/server/chapdb"
+	"github.com/srerickson/chaparral/server/uploader"
+	"github.com/srerickson/ocfl-go"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -18,12 +24,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/srerickson/chaparral"
-	"github.com/srerickson/chaparral/server"
-	"github.com/srerickson/chaparral/server/backend"
-	"github.com/srerickson/chaparral/server/chapdb"
-	"github.com/srerickson/chaparral/server/uploader"
 
 	"github.com/go-chi/httplog/v2"
 	"github.com/kkyr/fig"
@@ -213,7 +213,13 @@ func main() {
 	}
 }
 
-func newBackend(storage string) (server.Backend, error) {
+type Backend interface {
+	Name() string
+	IsAccessible() (bool, error)
+	NewFS() (ocfl.WriteFS, error)
+}
+
+func newBackend(storage string) (Backend, error) {
 	kind, loc, _ := strings.Cut(storage, "://")
 	switch kind {
 	case "file":

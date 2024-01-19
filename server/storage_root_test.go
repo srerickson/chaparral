@@ -20,7 +20,7 @@ func TestStorageRoot(t *testing.T) {
 	ctx := context.Background()
 
 	// storage group backed by a tempdir
-	root := testutil.MkGroupTempDir(t)
+	root := testutil.NewStoreTempDir(t)
 	be.NilErr(t, root.Ready(ctx))
 
 	// create the storage root
@@ -33,7 +33,7 @@ func TestStorageRoot(t *testing.T) {
 
 	// the testdata storage groups has a storage root called "test" that is
 	// read-only. Used here as a content source
-	srcRoot := testutil.MkGroupTestdata(t, filepath.Join("..", "testdata"))
+	srcRoot := testutil.NewStoreTestdata(t, filepath.Join("..", "testdata"))
 	be.NilErr(t, srcRoot.Ready(ctx))
 
 	srcObj, err := srcRoot.GetObjectState(ctx, "ark:123/abc", 0)

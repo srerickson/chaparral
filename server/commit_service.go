@@ -23,7 +23,6 @@ const (
 	CommitServiceName = chaparralv1connect.CommitServiceName
 	RouteUpload       = `/` + CommitServiceName + "/" + "upload"
 	QueryUploaderID   = "uploader"
-	QueryGroupID      = "group"
 	QueryStorageRoot  = "storage_root"
 )
 
@@ -215,7 +214,10 @@ func (s *CommitService) NewUploader(ctx context.Context, req *connect.Request[ch
 		UserID:      user.ID,
 		Algs:        req.Msg.DigestAlgorithms,
 	}
-	// TODO check nil uploadMgr
+	if s.uploadMgr == nil {
+		err := errors.New("the storage root does not allow uploading")
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
 	id, err := s.uploadMgr.NewUploader(ctx, uploaderConfig)
 	if err != nil {
 		logger.Error(err.Error())
@@ -351,10 +353,9 @@ func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	uploaderID := r.URL.Query().Get(QueryUploaderID)
-	//logger.DebugContext(ctx, "upload", QueryGroupID, groupID, QueryUploaderID, uploaderID)
-	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, CommitAction, "FIXME") {
+	if s.auth != nil && !s.auth.ActionAllowed(ctx, &user, CommitAction) {
 		w.WriteHeader(http.StatusUnauthorized)
-		result.Err = "you don't have permission to upload to this storage group"
+		result.Err = "you don't have permission to upload files"
 		return
 	}
 	upper, err := s.uploadMgr.GetUploader(ctx, uploaderID)

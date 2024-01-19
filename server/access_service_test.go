@@ -27,19 +27,19 @@ func TestAccessServiceHandler(t *testing.T) {
 	storePath := path.Join("storage-roots", "root-01")
 	objectID := "ark:123/abc"
 	storeID := "test"
-	group := testutil.MkGroupTestdata(t, testdataDir)
-	mux := server.New(server.WithStorageRoots(group))
+	storeA := testutil.NewStoreTestdata(t, testdataDir)
+	mux := server.New(server.WithStorageRoots(storeA))
 	srv := httptest.NewTLSServer(mux)
 	defer srv.Close()
 	httpClient := srv.Client()
 
 	// load fixture for comparison
 	ctx := context.Background()
-	store, err := ocflv1.GetStore(ctx, ocfl.DirFS(testdataDir), storePath)
+	storeB, err := ocflv1.GetStore(ctx, ocfl.DirFS(testdataDir), storePath)
 	if err != nil {
 		t.Fatal("in test setup:", err)
 	}
-	obj, err := store.GetObject(ctx, objectID)
+	obj, err := storeB.GetObject(ctx, objectID)
 	if err != nil {
 		t.Fatal("in test setup:", err)
 	}
@@ -63,7 +63,6 @@ func TestAccessServiceHandler(t *testing.T) {
 		vals := url.Values{
 			server.QueryContentPath: {"inventory.json"},
 			server.QueryObjectID:    {objectID},
-			server.QueryGroupID:     {group.ID()},
 			server.QueryStorageRoot: {storeID},
 		}
 		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
@@ -83,7 +82,6 @@ func TestAccessServiceHandler(t *testing.T) {
 		vals := url.Values{
 			server.QueryDigest:      {"43a43fe8a8a082d3b5343dfaf2fd0c8b8e370675b1f376e92e9994612c33ea255b11298269d72f797399ebb94edeefe53df243643676548f584fb8603ca53a0f"},
 			server.QueryObjectID:    {objectID},
-			server.QueryGroupID:     {group.ID()},
 			server.QueryStorageRoot: {storeID},
 		}
 		u := srv.URL + server.RouteDownload + "?" + vals.Encode()

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +23,7 @@ var (
 	defaultLayout = extension.Ext0002().(extension.Layout)
 )
 
-// StorageRoot represent an existing OCFL Storage Root in a Group
+// StorageRoot represent an existing OCFL Storage Root
 type StorageRoot struct {
 	id      string
 	fs      ocfl.WriteFS
@@ -213,29 +214,43 @@ func (store *StorageRoot) Validate(ctx context.Context, opts ...ocflv1.Validatio
 	return store.base.Validate(ctx, opts...), nil
 }
 
-// func (store *StorageRoot) ListObjects(ctx context.Context, objFn func(*ocflv1.Object, error) bool, concurrency int) error {
-// 	if err := store.Init(ctx); err != nil {
-// 		return err
-// 	}
-// 	setupFn := func(add func(objRoot *ocfl.ObjectRoot) bool) error {
-// 		return ocfl.ObjectRoots(ctx, store.group.FS, ocfl.Dir(store.path), func(obj *ocfl.ObjectRoot) error {
-// 			if !add(obj) {
-// 				return fmt.Errorf("object list interupted")
-// 			}
-// 			return nil
-// 		})
-// 	}
-// 	workFn := func(objRoot *ocfl.ObjectRoot) (*ocflv1.Object, error) {
-// 		obj := &ocflv1.Object{ObjectRoot: *objRoot}
-// 		return obj, obj.SyncInventory(ctx)
-// 	}
-// 	resultFn := func(objRoot *ocfl.ObjectRoot, obj *ocflv1.Object, err error) error {
-// 		// err from SyncInventory: if non-nil, the object has validation issues/
-// 		// objFn may return false to quit
-// 		if !objFn(obj, err) {
-// 			return errors.New("list objects ended prematurely")
-// 		}
-// 		return nil
-// 	}
-// 	return pipeline.Run(setupFn, workFn, resultFn, concurrency)
-// }
+//	func (store *StorageRoot) ListObjects(ctx context.Context, objFn func(*ocflv1.Object, error) bool, concurrency int) error {
+//		if err := store.Init(ctx); err != nil {
+//			return err
+//		}
+//		setupFn := func(add func(objRoot *ocfl.ObjectRoot) bool) error {
+//			return ocfl.ObjectRoots(ctx, store.group.FS, ocfl.Dir(store.path), func(obj *ocfl.ObjectRoot) error {
+//				if !add(obj) {
+//					return fmt.Errorf("object list interupted")
+//				}
+//				return nil
+//			})
+//		}
+//		workFn := func(objRoot *ocfl.ObjectRoot) (*ocflv1.Object, error) {
+//			obj := &ocflv1.Object{ObjectRoot: *objRoot}
+//			return obj, obj.SyncInventory(ctx)
+//		}
+//		resultFn := func(objRoot *ocfl.ObjectRoot, obj *ocflv1.Object, err error) error {
+//			// err from SyncInventory: if non-nil, the object has validation issues/
+//			// objFn may return false to quit
+//			if !objFn(obj, err) {
+//				return errors.New("list objects ended prematurely")
+//			}
+//			return nil
+//		}
+//		return pipeline.Run(setupFn, workFn, resultFn, concurrency)
+//	}
+
+func pathConflict(paths ...string) bool {
+	for i, a := range paths {
+		for _, b := range paths[i+1:] {
+			if a == b {
+				return true
+			}
+			if a == "." || b == "." || strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
+				return true
+			}
+		}
+	}
+	return false
+}

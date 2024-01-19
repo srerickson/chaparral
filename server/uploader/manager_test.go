@@ -32,7 +32,7 @@ func TestManager(t *testing.T) {
 	db, err := chapdb.Open("sqlite3", filepath.Join(tmpDir, "db.sqlite"), true)
 	be.NilErr(t, err)
 	persist := (*chapdb.SQLiteDB)(db)
-	fileBack := testutil.FileBackend(t)
+	fileBack := testutil.TempDirBackend(t)
 	fsys, err := fileBack.NewFS()
 	be.NilErr(t, err)
 	mgr := uploader.NewManager(fsys, "uploads", persist)

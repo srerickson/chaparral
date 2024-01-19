@@ -10,6 +10,6 @@ import (
 )
 
 func TestTestdataGroup(t *testing.T) {
-	store := testutil.MkGroupTestdata(t, filepath.Join("..", "..", "testdata"))
+	store := testutil.NewStoreTestdata(t, filepath.Join("..", "..", "testdata"))
 	be.NilErr(t, store.Ready(context.Background()))
 }

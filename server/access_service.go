@@ -169,7 +169,6 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		objectRoot = path.Join(store.Path(), objPath)
 	}
 	fullPath := path.Join(objectRoot, contentPath)
-	// content path relative to group's FS
 	f, err := store.FS().OpenFile(ctx, fullPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -184,7 +183,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	if _, err = io.Copy(w, f); err != nil {
 		pathErr := &fs.PathError{}
 		if errors.As(err, &pathErr) && strings.HasSuffix(pathErr.Path, fullPath) {
-			// only report path relative to group
+			// only report path relative to the storage root FS
 			pathErr.Path = fullPath
 		}
 		if strings.HasSuffix(err.Error(), "is a directory") {

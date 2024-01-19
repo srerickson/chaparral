@@ -1,16 +1,6 @@
 package server
 
-import (
-	"strings"
-
-	"github.com/srerickson/ocfl-go"
-)
-
-type Backend interface {
-	Name() string
-	IsAccessible() (bool, error)
-	NewFS() (ocfl.WriteFS, error)
-}
+import ()
 
 // type StorageGroup struct {
 // 	id      string
@@ -127,17 +117,3 @@ type Backend interface {
 // 	}
 // 	return store, nil
 // }
-
-func pathConflict(paths ...string) bool {
-	for i, a := range paths {
-		for _, b := range paths[i+1:] {
-			if a == b {
-				return true
-			}
-			if a == "." || b == "." || strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
-				return true
-			}
-		}
-	}
-	return false
-}
