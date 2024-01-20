@@ -607,7 +607,7 @@ func (x *GetUploaderResponse) GetUploads() []*GetUploaderResponse_Upload {
 	return nil
 }
 
-// ListUploaderRequest is used to access a list of uploaders in a storage group.
+// ListUploaderRequest is used to access a list of uploaders.
 type ListUploadersRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -646,7 +646,7 @@ func (*ListUploadersRequest) Descriptor() ([]byte, []int) {
 	return file_chaparral_v1_commit_service_proto_rawDescGZIP(), []int{8}
 }
 
-// ListUploaderResponse includes a list of uploaders in a storage group
+// ListUploaderResponse includes a list of uploaders
 type ListUploadersResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

@@ -14,10 +14,6 @@ import (
 	"github.com/srerickson/ocfl-go/validation"
 )
 
-const (
-	objectMgrCap = 1 << 10 // max number of object references in an object manager
-)
-
 var (
 	defaultSpec   = ocfl.Spec{1, 1}
 	defaultLayout = extension.Ext0002().(extension.Layout)
@@ -48,7 +44,7 @@ func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageInit
 		fs:     fsys,
 		path:   path,
 		init:   init,
-		locker: lock.NewLocker(objectMgrCap),
+		locker: lock.NewLocker(),
 	}
 }
 
@@ -207,11 +203,7 @@ func (store *StorageRoot) DeleteObject(ctx context.Context, objectID string) err
 	if err != nil {
 		return err
 	}
-	writeFS, ok := obj.FS.(ocfl.WriteFS)
-	if !ok {
-		return errors.New("object is is read-only")
-	}
-	return writeFS.RemoveAll(ctx, obj.Path)
+	return store.fs.RemoveAll(ctx, obj.Path)
 }
 
 func (store *StorageRoot) Validate(ctx context.Context, opts ...ocflv1.ValidationOption) (*validation.Result, error) {

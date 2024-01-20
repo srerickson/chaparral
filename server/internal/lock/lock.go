@@ -11,15 +11,15 @@ var (
 	ErrCapacity  = errors.New("resource lock capacity limit reached")
 )
 
+const Capacity = 1024
+
 type Locker struct {
-	cap   int
 	mx    sync.Mutex
 	locks map[string]*entry
 }
 
-func NewLocker(size int) *Locker {
+func NewLocker() *Locker {
 	return &Locker{
-		cap:   size,
 		locks: map[string]*entry{},
 	}
 }
@@ -49,7 +49,7 @@ func (l *Locker) WriteLock(key string) (unlock func(), err error) {
 		// existing lock is always an error
 		return nil, ErrWriteLock
 	}
-	if l.cap > 0 && len(l.locks) >= l.cap {
+	if len(l.locks) >= Capacity {
 		return nil, ErrCapacity
 	}
 	e = &entry{writing: true, refs: 1}
@@ -68,7 +68,7 @@ func (l *Locker) ReadLock(key string) (unlock func(), err error) {
 		e.refs++
 		return e.newUnlocker(l, key), nil
 	}
-	if l.cap > 0 && len(l.locks) >= l.cap {
+	if len(l.locks) >= Capacity {
 		return nil, ErrCapacity
 	}
 	e = &entry{refs: 1}

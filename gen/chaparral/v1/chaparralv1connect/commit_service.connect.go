@@ -57,12 +57,11 @@ type CommitServiceClient interface {
 	// Commit creates or updates individual OCFL objects
 	Commit(context.Context, *connect_go.Request[v1.CommitRequest]) (*connect_go.Response[v1.CommitResponse], error)
 	// NewUploader creates a new uploader where content can be uploaded before
-	// committing it to an object. Uploaders are associated with a specific
-	// storage group.
+	// committing it to an object..
 	NewUploader(context.Context, *connect_go.Request[v1.NewUploaderRequest]) (*connect_go.Response[v1.NewUploaderResponse], error)
 	// GetUploader returns details for a specific uploader
 	GetUploader(context.Context, *connect_go.Request[v1.GetUploaderRequest]) (*connect_go.Response[v1.GetUploaderResponse], error)
-	// ListUploaders returns a list of uploaders for a given storage group.
+	// ListUploaders returns a list of uploaders.
 	ListUploaders(context.Context, *connect_go.Request[v1.ListUploadersRequest]) (*connect_go.Response[v1.ListUploadersResponse], error)
 	// DeleteUploader deletes an uploader and files uploaded to it.
 	DeleteUploader(context.Context, *connect_go.Request[v1.DeleteUploaderRequest]) (*connect_go.Response[v1.DeleteUploaderResponse], error)
@@ -158,12 +157,11 @@ type CommitServiceHandler interface {
 	// Commit creates or updates individual OCFL objects
 	Commit(context.Context, *connect_go.Request[v1.CommitRequest]) (*connect_go.Response[v1.CommitResponse], error)
 	// NewUploader creates a new uploader where content can be uploaded before
-	// committing it to an object. Uploaders are associated with a specific
-	// storage group.
+	// committing it to an object..
 	NewUploader(context.Context, *connect_go.Request[v1.NewUploaderRequest]) (*connect_go.Response[v1.NewUploaderResponse], error)
 	// GetUploader returns details for a specific uploader
 	GetUploader(context.Context, *connect_go.Request[v1.GetUploaderRequest]) (*connect_go.Response[v1.GetUploaderResponse], error)
-	// ListUploaders returns a list of uploaders for a given storage group.
+	// ListUploaders returns a list of uploaders.
 	ListUploaders(context.Context, *connect_go.Request[v1.ListUploadersRequest]) (*connect_go.Response[v1.ListUploadersResponse], error)
 	// DeleteUploader deletes an uploader and files uploaded to it.
 	DeleteUploader(context.Context, *connect_go.Request[v1.DeleteUploaderRequest]) (*connect_go.Response[v1.DeleteUploaderResponse], error)
