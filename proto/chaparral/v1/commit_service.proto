@@ -11,14 +11,13 @@ service CommitService {
     rpc Commit(CommitRequest) returns (CommitResponse) {}
 
     // NewUploader creates a new uploader where content can be uploaded before
-    // committing it to an object. Uploaders are associated with a specific
-    // storage group.
+    // committing it to an object..
     rpc NewUploader(NewUploaderRequest) returns (NewUploaderResponse) {}
     
     // GetUploader returns details for a specific uploader
     rpc GetUploader(GetUploaderRequest) returns (GetUploaderResponse) {}
 
-    // ListUploaders returns a list of uploaders for a given storage group.
+    // ListUploaders returns a list of uploaders.
     rpc ListUploaders(ListUploadersRequest) returns (ListUploadersResponse){}
     
     // DeleteUploader deletes an uploader and files uploaded to it.
@@ -127,10 +126,10 @@ message GetUploaderResponse{
     repeated Upload uploads = 7;
 }
 
-// ListUploaderRequest is used to access a list of uploaders in a storage group.
+// ListUploaderRequest is used to access a list of uploaders.
 message ListUploadersRequest{}
 
-// ListUploaderResponse includes a list of uploaders in a storage group
+// ListUploaderResponse includes a list of uploaders
 message ListUploadersResponse{
     message Item{
         string uploader_id = 1;
