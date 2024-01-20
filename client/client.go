@@ -191,13 +191,13 @@ func (commit *Commit) asProto() *chapv1.CommitRequest {
 // content source. If the commit's state is empty, then the source object's
 // current version state is used. If srcStore is empty strings,
 // commit.GroupID and commit.StorageRootID are used.
-func (cli Client) CommitFork(ctx context.Context, commit *Commit, srcStore, srcObjID string) error {
+func (cli Client) CommitFork(ctx context.Context, commit *Commit, srcStore, srcObj string) error {
 	if err := commit.valid(); err != nil {
 		return err
 	}
 	objSource := &chapv1.CommitRequest_ObjectSource{
 		StorageRootId: srcStore,
-		ObjectId:      srcObjID,
+		ObjectId:      srcObj,
 	}
 	req := commit.asProto()
 	req.ContentSource = &chapv1.CommitRequest_Object{Object: objSource}
@@ -228,7 +228,6 @@ func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Upload
 }
 
 type ObjectState struct {
-	GroupId         string
 	StorageRootID   string
 	ObjectID        string
 	Spec            string
@@ -262,9 +261,9 @@ func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
 	return state
 }
 
-func (cli Client) GetObjectState(ctx context.Context, storeRoot string, objectID string, ver int) (*ObjectState, error) {
+func (cli Client) GetObjectState(ctx context.Context, storeID string, objectID string, ver int) (*ObjectState, error) {
 	req := &chapv1.GetObjectStateRequest{
-		StorageRootId: storeRoot,
+		StorageRootId: storeID,
 		ObjectId:      objectID,
 		Version:       int32(ver),
 	}
@@ -276,9 +275,9 @@ func (cli Client) GetObjectState(ctx context.Context, storeRoot string, objectID
 	return state, nil
 }
 
-func (cli Client) DeleteObject(ctx context.Context, storeRoot string, objectID string) error {
+func (cli Client) DeleteObject(ctx context.Context, storeID string, objectID string) error {
 	req := &chapv1.DeleteObjectRequest{
-		StorageRootId: storeRoot,
+		StorageRootId: storeID,
 		ObjectId:      objectID,
 	}
 	_, err := cli.commit.DeleteObject(ctx, connect.NewRequest(req))

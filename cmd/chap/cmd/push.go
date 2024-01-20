@@ -98,10 +98,6 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 }
 
 func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *client.Commit, srcDir string, uploaderID string) error {
-	// if err := cli.StorageRootExists(ctx, com.GroupID, com.StorageRootID); err != nil {
-	// 	return err
-	// }
-	// check commit against existing object for continiuity
 	existing, err := cli.GetObjectState(ctx, com.StorageRootID, com.ObjectID, 0)
 	if err != nil && !client.IsNotFound(err) {
 		return fmt.Errorf("getting existing object state: %w", err)
@@ -110,7 +106,7 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *clie
 	case existing == nil:
 		// creating a new object
 		if com.Version > 1 {
-			return fmt.Errorf("object %q doesn't exist; can't create v %d", com.ObjectID, com.Version)
+			return fmt.Errorf("object %q doesn't exist. Can't create version %d", com.ObjectID, com.Version)
 		}
 		if com.Version == 0 {
 			com.Version = 1
