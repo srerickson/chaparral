@@ -128,12 +128,12 @@ func AuthUserMiddleware(authFn AuthUserFunc) func(http.Handler) http.Handler {
 // Authorizer is an interface used by types that can perform authorziation
 // for requests.
 type Authorizer interface {
-	// RootActionAllowed returns true if the user is allowed to perform action on a resource
-	// with the given group_id and root_id.
-	RootActionAllowed(ctx context.Context, user *AuthUser, action, group_id, root_id string) bool
-	// GroupActionAllowed returns true if the user is allowed to perform action
-	// for at least one resource with the given group_id.
-	GroupActionAllowed(ctx context.Context, user *AuthUser, action, group_id string) bool
+	// RootActionAllowed returns true if the user is allowed to perform action
+	// on the resource with the given root_id.
+	RootActionAllowed(ctx context.Context, user *AuthUser, action, root_id string) bool
+	// ActionAllowed return true if the user has permission to perform action
+	// on at least one resource.
+	ActionAllowed(ctx context.Context, user *AuthUser, action string) bool
 }
 
 // Permissions is a map of roles to permissions. It implements the Authorizer
@@ -142,57 +142,46 @@ type Permissions map[string][]RolePermission
 
 // RootActionAllowed returns true if the user has a role with a permission
 // allowing the action on the resource with the given group and root ids.
-func (p Permissions) RootActionAllowed(_ context.Context, user *AuthUser, action, group, root string) bool {
+func (p Permissions) RootActionAllowed(_ context.Context, user *AuthUser, action, root string) bool {
 	roles := []string{DefaultRole}
 	if user != nil {
 		roles = append(roles, user.Roles...)
 	}
 	return slices.ContainsFunc(roles, func(r string) bool {
 		return slices.ContainsFunc(p[r], func(rp RolePermission) bool {
-			return rp.allowRoot(action, group, root)
+			return rp.allowRootAction(action, root)
 		})
 	})
 }
 
-// GroupActionAllowed returns true if the user has a role with a permission
-// allowing the action for at least one resource with the given group id.
-func (p Permissions) GroupActionAllowed(_ context.Context, user *AuthUser, action, group string) bool {
+func (p Permissions) ActionAllowed(_ context.Context, user *AuthUser, action string) bool {
 	roles := []string{DefaultRole}
 	if user != nil {
 		roles = append(roles, user.Roles...)
 	}
 	return slices.ContainsFunc(roles, func(r string) bool {
 		return slices.ContainsFunc(p[r], func(rp RolePermission) bool {
-			return rp.allowGroup(action, group)
+			return rp.allowAction(action)
 		})
 	})
 }
 
 type RolePermission struct {
-	Actions        []string `json:"actions"`
-	StorageGroupID string   `json:"storage_group_id"`
-	StorageRootID  string   `json:"storage_root_id"`
+	Actions       []string `json:"actions"`
+	StorageRootID string   `json:"storage_root_id"`
 }
 
-func (p RolePermission) allowRoot(action, group, root string) bool {
-	if !p.allowGroup(action, group) {
-		return false
-	}
-	return (p.StorageRootID == "*" || p.StorageGroupID == root)
+func (p RolePermission) allowAction(action string) bool {
+	return slices.ContainsFunc(p.Actions, func(a string) bool {
+		return a == "*" || a == action
+	})
 }
 
-// allowGroup returns true if there if the permission applies
-// to the group and includes the action
-func (p RolePermission) allowGroup(action, group string) bool {
-	if p.StorageGroupID != "*" && p.StorageGroupID != group {
+func (p RolePermission) allowRootAction(action, root string) bool {
+	if !p.allowAction(action) {
 		return false
 	}
-	for _, a := range p.Actions {
-		if a == "*" || a == action {
-			return true
-		}
-	}
-	return false
+	return (p.StorageRootID == "*" || p.StorageRootID == root)
 }
 
 // DefaultPermissions returns the default server Permissions.
@@ -210,9 +199,9 @@ func DefaultPermissions() Permissions {
 			// storage root
 			{Actions: []string{ReadAction, CommitAction, DeleteAction}},
 		},
-		// admins can do anything to objects in any storage group
+		// admins can do anything to objects in any storage root
 		AdminRole: []RolePermission{
-			{Actions: []string{"*"}, StorageGroupID: "*", StorageRootID: "*"},
+			{Actions: []string{"*"}, StorageRootID: "*"},
 		},
 	}
 }

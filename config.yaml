@@ -12,6 +12,13 @@
 # backend: file:///data
 
 
+# Upload path
+#
+# Set 'uploads' to a directory path (relative to the backend) where uploads will
+# be stored. Note that storage root paths must not include or be included in
+# this directory. The default value ("") disables uploads.
+uploads: "uploads"
+
 # Sorage Root config
 #
 # Multiple OCFL storage roots can be configured. Here the default storage root

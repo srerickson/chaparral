@@ -25,19 +25,16 @@ const size = 2_000_000
 var _ chapv1connect.CommitServiceHandler = (*server.CommitService)(nil)
 
 func TestCommitServiceCommit(t *testing.T) {
-	test := func(t *testing.T, htc *http.Client, url string, grp *server.StorageGroup) {
+	test := func(t *testing.T, htc *http.Client, url string, store *server.StorageRoot) {
 		ctx := context.Background()
 		chap := chapv1connect.NewCommitServiceClient(htc, url)
 		alg := `sha256`
 		newUpResp, err := chap.NewUploader(ctx, connect.NewRequest(&chapv1.NewUploaderRequest{
-			GroupId:          grp.ID(),
 			DigestAlgorithms: []string{alg},
 			Description:      "test commit",
 		}))
 		be.NilErr(t, err)
-		be.Equal(t, newUpResp.Msg.GroupId, grp.ID())
 		uploaderID := newUpResp.Msg.UploaderId
-		uploaderGroup := newUpResp.Msg.GroupId
 		uploaderURL := url + newUpResp.Msg.UploadPath
 		// upload some files and add digests to new state
 		newState := map[string]string{}
@@ -56,7 +53,6 @@ func TestCommitServiceCommit(t *testing.T) {
 			newState[name] = upload.Digests[alg]
 		}
 		commitReq := &chapv1.CommitRequest{
-			GroupId:         grp.ID(),
 			StorageRootId:   "test",
 			DigestAlgorithm: alg,
 			State:           newState,
@@ -65,19 +61,16 @@ func TestCommitServiceCommit(t *testing.T) {
 			ObjectId:        "new-01",
 			ContentSource: &chapv1.CommitRequest_Uploader{
 				Uploader: &chapv1.CommitRequest_UploaderSource{
-					GroupId:    uploaderGroup,
 					UploaderId: uploaderID,
 				},
 			},
 		}
 		_, err = chap.Commit(ctx, connect.NewRequest(commitReq))
 		be.NilErr(t, err)
-		store, err := grp.StorageRoot("test")
-		be.NilErr(t, err)
 		// check object directly
-		obj, err := store.GetObject(ctx, "new-01")
+		obj, err := store.GetObjectState(ctx, "new-01", 0)
 		be.NilErr(t, err)
-		be.Equal(t, len(filenames), obj.Inventory.Manifest.LenPaths())
+		be.Equal(t, len(filenames), obj.State.LenPaths())
 		result, err := store.Validate(ctx)
 		be.NilErr(t, err)
 		be.NilErr(t, result.Err())
@@ -86,14 +79,14 @@ func TestCommitServiceCommit(t *testing.T) {
 }
 
 func TestCommitServiceUploader(t *testing.T) {
-	testutil.RunServiceTest(t, func(t *testing.T, htc *http.Client, url string, grp *server.StorageGroup) {
+	testutil.RunServiceTest(t, func(t *testing.T, htc *http.Client, url string, store *server.StorageRoot) {
 		times := 4 // concurrent uploaders
 		wg := sync.WaitGroup{}
 		wg.Add(times)
 		for i := 0; i < times; i++ {
 			go func() {
 				defer wg.Done()
-				testCommitServiceUploader(t, htc, url, grp)
+				testCommitServiceUploader(t, htc, url, store)
 			}()
 		}
 		wg.Wait()
@@ -101,7 +94,7 @@ func TestCommitServiceUploader(t *testing.T) {
 }
 
 // test creating an uploader, uploading to it, accessing it, and destroying it
-func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, group *server.StorageGroup) {
+func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, store *server.StorageRoot) {
 	ctx := context.Background()
 	chapClient := chapv1connect.NewCommitServiceClient(htc, baseURL)
 	// create new uploader
@@ -109,7 +102,6 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, g
 	alg2 := ocfl.MD5
 	desc := "test uploader"
 	newUpResp, err := chapClient.NewUploader(ctx, connect.NewRequest(&chapv1.NewUploaderRequest{
-		GroupId:          group.ID(),
 		DigestAlgorithms: []string{alg1, alg2},
 		Description:      desc,
 	}))
@@ -118,7 +110,6 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, g
 	}
 	uploaderID := newUpResp.Msg.UploaderId
 	uploaderPath := newUpResp.Msg.UploadPath
-	uploaderGroup := newUpResp.Msg.GroupId
 	// concurrent uploads of 2MB random data.
 	times := 3
 	wg := sync.WaitGroup{}
@@ -180,9 +171,7 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, g
 	}
 	wg.Wait()
 	// list the uploaders
-	listUpResp, err := chapClient.ListUploaders(ctx, connect.NewRequest(&chapv1.ListUploadersRequest{
-		GroupId: uploaderGroup,
-	}))
+	listUpResp, err := chapClient.ListUploaders(ctx, connect.NewRequest(&chapv1.ListUploadersRequest{}))
 	if !nilErr(t, err) {
 		return
 	}
@@ -192,6 +181,7 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, g
 	_, err = chapClient.DeleteUploader(ctx, connect.NewRequest(&chapv1.DeleteUploaderRequest{
 		UploaderId: uploaderID,
 	}))
+	// FIXME: this test fails sometimes
 	if !nilErr(t, err) {
 		return
 	}

@@ -42,7 +42,6 @@ func NewClient(c *http.Client, baseurl string) *Client {
 
 type Uploader struct {
 	ID               string    `json:"id"`
-	GroupID          string    `json:"group_id"`
 	UploadPath       string    `json:"upload_path"`
 	DigestAlgorithms []string  `json:"digest_algorithms"`
 	Description      string    `json:"description"`
@@ -56,9 +55,8 @@ type Upload struct {
 	Digests ocfl.DigestSet `json:"digests"`
 }
 
-func (cli Client) NewUploader(ctx context.Context, grpID string, algs []string, desc string) (up *Uploader, err error) {
+func (cli Client) NewUploader(ctx context.Context, algs []string, desc string) (up *Uploader, err error) {
 	req := connect.NewRequest(&chapv1.NewUploaderRequest{
-		GroupId:          grpID,
 		DigestAlgorithms: algs,
 		Description:      desc,
 	})
@@ -68,7 +66,6 @@ func (cli Client) NewUploader(ctx context.Context, grpID string, algs []string, 
 	}
 	up = &Uploader{
 		ID:               resp.Msg.UploaderId,
-		GroupID:          resp.Msg.GroupId,
 		UploadPath:       resp.Msg.UploadPath,
 		Description:      resp.Msg.Description,
 		DigestAlgorithms: resp.Msg.DigestAlgorithms,
@@ -85,7 +82,6 @@ func (cli Client) GetUploader(ctx context.Context, id string) (up *Uploader, err
 	}
 	up = &Uploader{
 		ID:               resp.Msg.UploaderId,
-		GroupID:          resp.Msg.GroupId,
 		UploadPath:       resp.Msg.UploadPath,
 		Description:      resp.Msg.Description,
 		DigestAlgorithms: resp.Msg.DigestAlgorithms,
@@ -100,17 +96,14 @@ func (cli Client) GetUploader(ctx context.Context, id string) (up *Uploader, err
 }
 
 type UploaderListItem struct {
-	GroupID     string
 	ID          string
 	Created     time.Time
 	UserID      string
 	Description string
 }
 
-func (cli Client) ListUploaders(ctx context.Context, grpID string) ([]UploaderListItem, error) {
-	req := &chapv1.ListUploadersRequest{
-		GroupId: grpID,
-	}
+func (cli Client) ListUploaders(ctx context.Context) ([]UploaderListItem, error) {
+	req := &chapv1.ListUploadersRequest{}
 	resp, err := cli.commit.ListUploaders(ctx, connect.NewRequest(req))
 	if err != nil {
 		return nil, err
@@ -118,7 +111,6 @@ func (cli Client) ListUploaders(ctx context.Context, grpID string) ([]UploaderLi
 	ids := make([]UploaderListItem, len(resp.Msg.Uploaders))
 	for i, up := range resp.Msg.Uploaders {
 		ids[i] = UploaderListItem{
-			GroupID:     up.GroupId,
 			ID:          up.UploaderId,
 			Description: up.Description,
 			Created:     up.Created.AsTime(),
@@ -163,7 +155,6 @@ func (cli Client) Upload(ctx context.Context, uploadPath string, r io.Reader) (r
 }
 
 type Commit struct {
-	GroupID       string
 	StorageRootID string
 	ObjectID      string
 	Version       int
@@ -186,7 +177,6 @@ func (commit Commit) valid() error {
 
 func (commit *Commit) asProto() *chapv1.CommitRequest {
 	return &chapv1.CommitRequest{
-		GroupId:         commit.GroupID,
 		StorageRootId:   commit.StorageRootID,
 		ObjectId:        commit.ObjectID,
 		Message:         commit.Message,
@@ -199,16 +189,15 @@ func (commit *Commit) asProto() *chapv1.CommitRequest {
 
 // CommitFork creates or updates an object using an existing object as its
 // content source. If the commit's state is empty, then the source object's
-// current version state is used. If srcGroup and srcStore are empty strings,
+// current version state is used. If srcStore is empty strings,
 // commit.GroupID and commit.StorageRootID are used.
-func (cli Client) CommitFork(ctx context.Context, commit *Commit, srcGroup, srcStore, srcObjID string) error {
+func (cli Client) CommitFork(ctx context.Context, commit *Commit, srcStore, srcObj string) error {
 	if err := commit.valid(); err != nil {
 		return err
 	}
 	objSource := &chapv1.CommitRequest_ObjectSource{
-		GroupId:       srcGroup,
 		StorageRootId: srcStore,
-		ObjectId:      srcObjID,
+		ObjectId:      srcObj,
 	}
 	req := commit.asProto()
 	req.ContentSource = &chapv1.CommitRequest_Object{Object: objSource}
@@ -226,7 +215,6 @@ func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Upload
 	if up != nil {
 		req.ContentSource = &chapv1.CommitRequest_Uploader{
 			Uploader: &chapv1.CommitRequest_UploaderSource{
-				GroupId:    up.GroupID,
 				UploaderId: up.ID,
 			},
 		}
@@ -240,7 +228,6 @@ func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Upload
 }
 
 type ObjectState struct {
-	GroupId         string
 	StorageRootID   string
 	ObjectID        string
 	Spec            string
@@ -255,7 +242,6 @@ type ObjectState struct {
 
 func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
 	state := &ObjectState{
-		GroupId:         proto.GroupId,
 		StorageRootID:   proto.StorageRootId,
 		ObjectID:        proto.ObjectId,
 		Spec:            proto.Spec,
@@ -275,10 +261,9 @@ func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
 	return state
 }
 
-func (cli Client) GetObjectState(ctx context.Context, groupID string, storeRoot string, objectID string, ver int) (*ObjectState, error) {
+func (cli Client) GetObjectState(ctx context.Context, storeID string, objectID string, ver int) (*ObjectState, error) {
 	req := &chapv1.GetObjectStateRequest{
-		GroupId:       groupID,
-		StorageRootId: storeRoot,
+		StorageRootId: storeID,
 		ObjectId:      objectID,
 		Version:       int32(ver),
 	}
@@ -290,10 +275,9 @@ func (cli Client) GetObjectState(ctx context.Context, groupID string, storeRoot 
 	return state, nil
 }
 
-func (cli Client) DeleteObject(ctx context.Context, groupID string, storeRoot string, objectID string) error {
+func (cli Client) DeleteObject(ctx context.Context, storeID string, objectID string) error {
 	req := &chapv1.DeleteObjectRequest{
-		GroupId:       groupID,
-		StorageRootId: storeRoot,
+		StorageRootId: storeID,
 		ObjectId:      objectID,
 	}
 	_, err := cli.commit.DeleteObject(ctx, connect.NewRequest(req))
@@ -301,10 +285,9 @@ func (cli Client) DeleteObject(ctx context.Context, groupID string, storeRoot st
 }
 
 // Download
-func (cli Client) GetContent(ctx context.Context, groupID, storeID, objectID, digest, contentPath string) (io.ReadCloser, error) {
+func (cli Client) GetContent(ctx context.Context, storeID, objectID, digest, contentPath string) (io.ReadCloser, error) {
 	u := cli.baseURL + server.RouteDownload
 	vals := url.Values{
-		server.QueryGroupID:     {groupID},
 		server.QueryStorageRoot: {storeID},
 		server.QueryObjectID:    {objectID},
 		server.QueryContentPath: {contentPath},

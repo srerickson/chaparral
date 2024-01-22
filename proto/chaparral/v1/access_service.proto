@@ -14,44 +14,38 @@ service AccessService {
 
 // GetObjectStateRequest is used to request information about an object's state.
 message GetObjectStateRequest{
-    // The storage group id for the object to access. If not set, the default
-    // storage group is used.
-    string group_id = 1;
     // The storage root id for the object to access. If not set, the default
     // storage root is used.
-    string storage_root_id = 2;
+    string storage_root_id = 1;
     // The object id to access (required).
-    string object_id = 3;
+    string object_id = 2;
     // The version index for the object state. The default value is 0, which
     // refers to the most recent version.
-    int32 version = 4;
+    int32 version = 3;
 }
 
 // GetObjectStateResponse represents state for a specific object version.
 message GetObjectStateResponse {
-    // The object's storage group id. The empty string corresponds to the
-    // default storage group.
-    string group_id = 1;
     // The object's storage root id. The empty string corresponds to the default
     // storage root.
-    string storage_root_id = 2;
+    string storage_root_id = 1;
     // The object's id
-    string object_id = 3;
+    string object_id = 2;
     // The index for the object version represented by the state.
-    int32 version = 4;
+    int32 version = 3;
     // The object's most recent version index.
-    int32 head = 5;
+    int32 head = 4;
     // The object's digest algorithm (sha512 or sha256)
-    string digest_algorithm = 6;
+    string digest_algorithm = 5;
     // The object's logical state represented as a map from file paths to digest
     // values using the object's digest algorithm.
-    map<string,string> state = 7;
+    map<string,string> state = 6;
     // The message associated with the object version
-    string messsage= 8;
+    string messsage = 7;
     // The user information associated with the object version
-    User user = 9;
+    User user = 8;
     // The timestamp associated witht he object version
-    google.protobuf.Timestamp created = 10;
+    google.protobuf.Timestamp created = 9;
     // The OCFL specification version for the object version.
-    string spec = 11;
+    string spec = 10;
 }

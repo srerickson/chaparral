@@ -49,15 +49,15 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		"version", req.Msg.Version,
 	)
 	user := AuthUserFromCtx(ctx)
-	store, err := s.storageRoot(req.Msg.GroupId, req.Msg.StorageRootId)
+	store, err := s.storageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
-	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.GroupId, req.Msg.StorageRootId) {
+	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
 		err = errors.New("you don't have permission to read from the storage root")
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-	obj, err := store.GetObject(ctx, req.Msg.ObjectId)
+	obj, err := store.GetObjectState(ctx, req.Msg.ObjectId, int(req.Msg.Version))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, connect.NewError(connect.CodeNotFound, err)
@@ -66,29 +66,19 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	defer obj.Close()
-	if req.Msg.Version > int32(obj.Inventory.Head.Num()) {
-		err := fmt.Errorf("object version doesn't exist")
-		return nil, connect.NewError(connect.CodeNotFound, err)
-	}
-	state, err := obj.State(int(req.Msg.Version))
-	if err != nil {
-		logger.Error(err.Error())
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
 	resp := &chaparralv1.GetObjectStateResponse{
-		GroupId:         req.Msg.GroupId,
 		StorageRootId:   req.Msg.StorageRootId,
-		ObjectId:        req.Msg.ObjectId,
-		DigestAlgorithm: state.Alg,
-		Version:         int32(state.VNum.Num()),
-		Head:            int32(state.Head.Num()),
-		Spec:            state.Spec.String(),
-		Messsage:        state.Message,
-		Created:         timestamppb.New(state.Created),
-		State:           state.PathMap(),
+		ObjectId:        obj.ID,
+		DigestAlgorithm: obj.Alg,
+		Version:         int32(obj.Version),
+		Head:            int32(obj.Head),
+		Spec:            obj.Spec.String(),
+		Messsage:        obj.Message,
+		Created:         timestamppb.New(obj.Created),
+		State:           obj.State.PathMap(),
 	}
-	if state.User != nil {
-		resp.User = (*User)(state.User).AsProto()
+	if obj.User != nil {
+		resp.User = (*User)(obj.User).AsProto()
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -98,7 +88,6 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		err         error
 		objectRoot  string
 		ctx         = r.Context()
-		groupID     = r.URL.Query().Get(QueryGroupID)
 		storeID     = r.URL.Query().Get(QueryStorageRoot)
 		objectID    = r.URL.Query().Get(QueryObjectID)
 		digest      = r.URL.Query().Get(QueryDigest)
@@ -120,12 +109,12 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	store, err := srv.storageRoot(groupID, storeID)
+	store, err := srv.storageRoot(storeID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	if srv.auth != nil && !srv.auth.RootActionAllowed(ctx, &user, ReadAction, groupID, storeID) {
+	if srv.auth != nil && !srv.auth.RootActionAllowed(ctx, &user, ReadAction, storeID) {
 		w.WriteHeader(http.StatusUnauthorized)
 		err = errors.New("you don't have permission to download from the storage root")
 		return
@@ -145,8 +134,8 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	case contentPath == "":
 		// get contentPath using digest
 		// TODO: use a cache
-		var obj *Object
-		obj, err = store.GetObject(ctx, objectID)
+		var obj *ObjectState
+		obj, err = store.GetObjectState(ctx, objectID, 0)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				w.WriteHeader(http.StatusNotFound)
@@ -157,7 +146,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		}
 		defer obj.Close()
 		objectRoot = obj.Path
-		if p := obj.Inventory.Manifest.DigestPaths(digest); len(p) > 0 {
+		if p := obj.Manifest.DigestPaths(digest); len(p) > 0 {
 			contentPath = p[0]
 		}
 		if contentPath == "" {
@@ -180,10 +169,13 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		objectRoot = path.Join(store.Path(), objPath)
 	}
 	fullPath := path.Join(objectRoot, contentPath)
-	// content path relative to group's FS
 	f, err := store.FS().OpenFile(ctx, fullPath)
 	if err != nil {
-		logger.Error(err.Error())
+		if errors.Is(err, fs.ErrNotExist) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		logger.Error("during uploader: " + err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -191,7 +183,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	if _, err = io.Copy(w, f); err != nil {
 		pathErr := &fs.PathError{}
 		if errors.As(err, &pathErr) && strings.HasSuffix(pathErr.Path, fullPath) {
-			// only report path relative to group
+			// only report path relative to the storage root FS
 			pathErr.Path = fullPath
 		}
 		if strings.HasSuffix(err.Error(), "is a directory") {

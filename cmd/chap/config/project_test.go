@@ -19,9 +19,8 @@ func TestGetProject(t *testing.T) {
 	projectDir, err := filepath.EvalSymlinks(projectDir)
 	be.NilErr(t, err)
 	newProject := config.Project{
-		StorageGroupID: "group",
-		StorageRootID:  "root",
-		ObjectID:       "object",
+		StorageRootID: "root",
+		ObjectID:      "object",
 	}
 	be.NilErr(t, config.InitProject(projectDir, newProject))
 	// getting the project when working directory is outside fails
@@ -32,7 +31,9 @@ func TestGetProject(t *testing.T) {
 	cwd, err := os.Getwd()
 	be.NilErr(t, err)
 	be.NilErr(t, os.Chdir(subDir))
-	defer os.Chdir(cwd)
+	defer func() {
+		_ = os.Chdir(cwd)
+	}()
 	p, err := config.SearchProject("")
 	be.NilErr(t, err)
 	// convert to path without symlinks, if necessary
@@ -40,6 +41,5 @@ func TestGetProject(t *testing.T) {
 	be.NilErr(t, err)
 	be.Equal(t, p.Path(), projectDir)
 	be.Equal(t, p.ObjectID, newProject.ObjectID)
-	be.Equal(t, p.StorageGroupID, newProject.StorageGroupID)
 	be.Equal(t, p.StorageRootID, newProject.StorageRootID)
 }

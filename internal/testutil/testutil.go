@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,44 +20,70 @@ import (
 	"github.com/srerickson/chaparral/server"
 	"github.com/srerickson/chaparral/server/backend"
 	"github.com/srerickson/chaparral/server/chapdb"
-	"github.com/srerickson/ocfl-go"
+	"github.com/srerickson/chaparral/server/uploader"
+	"github.com/srerickson/ocfl-go/backend/local"
 	"github.com/srerickson/ocfl-go/extension"
-	"github.com/srerickson/ocfl-go/ocflv1"
 )
 
-var s3Env = "CHAPARRAL_TEST_S3"
-
-type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, group *server.StorageGroup)
-
-func RunServiceTest(t *testing.T, testFn ServiceTestFunc) {
-	grps := []*server.StorageGroup{MkGroupTempDir(t)}
-	if WithS3() {
-		grps = append(grps, MkGroupTempS3(t))
+var (
+	s3Env     = "CHAPARRAL_TEST_S3"
+	storeConf = server.StorageInitializer{
+		Description: "test store",
+		Layout:      extension.Ext0003().Name(),
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-		//Level: slog.LevelDebug,
-	}))
-	testAuthFunc := server.DefaultAuthUserFunc(&testKey().PublicKey)
+)
+
+type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, store *server.StorageRoot)
+
+func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{}))
+	authFn := server.DefaultAuthUserFunc(&testKey().PublicKey)
 	tmpData := t.TempDir()
-	db, err := chapdb.Open("sqlite3", filepath.Join(tmpData, "db.sqlite"), true)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	defer db.Close()
-	mux := server.New(
-		server.WithAuthUserFunc(testAuthFunc),
+	opts := []server.Option{
+		server.WithLogger(logger),
+		server.WithAuthUserFunc(authFn),
 		server.WithAuthorizer(server.DefaultPermissions()),
-		server.WithStorageGroups(grps...),
-		server.WithSQLDB(db),
-	)
-	testSrv := httptest.NewTLSServer(mux)
-	testCli := testSrv.Client()
-	authorizeClient(testSrv.Client(), AdminUser)
-	defer testSrv.Close()
-	for _, grp := range grps {
-		t.Run("storage-group"+grp.ID(), func(t *testing.T) {
-			testFn(t, testCli, testSrv.URL, grp)
+	}
+	t.Run("local-root", func(t *testing.T) {
+		db, err := chapdb.Open("sqlite3", filepath.Join(tmpData, "local-db.sqlite"), true)
+		if err != nil {
+			logger.Error(err.Error())
+			os.Exit(1)
+		}
+		defer db.Close()
+		store := NewStoreTempDir(t)
+		mgr := uploader.NewManager(store.FS(), "uploads", (*chapdb.SQLiteDB)(db))
+		mux := server.New(append(opts,
+			server.WithStorageRoots(store),
+			server.WithUploaderManager(mgr))...)
+		testSrv := httptest.NewTLSServer(mux)
+		testCli := testSrv.Client()
+		authorizeClient(testSrv.Client(), AdminUser)
+		defer testSrv.Close()
+		for _, ts := range tests {
+			ts(t, testCli, testSrv.URL, store)
+		}
+	})
+	if WithS3() {
+		t.Run("s3-root", func(t *testing.T) {
+			db, err := chapdb.Open("sqlite3", filepath.Join(tmpData, "s3-db.sqlite"), true)
+			if err != nil {
+				logger.Error(err.Error())
+				os.Exit(1)
+			}
+			defer db.Close()
+			root := NewStoreS3(t)
+			mgr := uploader.NewManager(root.FS(), "uploads", (*chapdb.SQLiteDB)(db))
+			mux := server.New(append(opts,
+				server.WithStorageRoots(root),
+				server.WithUploaderManager(mgr))...)
+			testSrv := httptest.NewTLSServer(mux)
+			testCli := testSrv.Client()
+			authorizeClient(testSrv.Client(), AdminUser)
+			defer testSrv.Close()
+			for _, ts := range tests {
+				ts(t, testCli, testSrv.URL, root)
+			}
 		})
 	}
 }
@@ -79,67 +104,53 @@ func S3Session() (*s3.S3, error) {
 	return s3.New(sess), nil
 }
 
-// Returns a storage group using the testdata directory as a backend.
-func MkGroupTestdata(testdataPath string) (*server.StorageGroup, error) {
-	grp, err := server.NewStorageGroup("testdata", &backend.FileBackend{Path: testdataPath})
-	if err != nil {
-		return nil, err
-	}
-	if err := grp.AddStorageRoot("test", path.Join("storage-roots", "root-01")); err != nil {
-		return nil, err
-	}
-	return grp, nil
-}
-
-// group config for testadata directory
-func MkGroupTempDir(t *testing.T) *server.StorageGroup {
-	tmpd := t.TempDir()
-	back := &backend.FileBackend{Path: tmpd}
-	grpID := strings.ReplaceAll(tmpd, "/", "-")
-	grp, err := server.NewStorageGroup(grpID, back)
+// Testdata storage root
+func NewStoreTestdata(t *testing.T, testdataPath string) *server.StorageRoot {
+	fsys, err := local.NewFS(testdataPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	storeConf := &ocflv1.InitStoreConf{
-		Spec:        ocfl.Spec1_1,
-		Description: "test store",
-		Layout:      extension.Ext0003().(extension.Layout),
-	}
-	if err := grp.InitStorageRoot(context.Background(), "test", "test", storeConf); err != nil {
+	dir := path.Join("storage-roots", "root-01")
+	root := server.NewStorageRoot("test", fsys, dir, nil)
+	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := grp.SetUploadRoot("uploads"); err != nil {
-		t.Fatal(err)
-	}
-	return grp
+	return root
 }
 
-func FileBackend(t *testing.T) *backend.FileBackend {
-	tmpd := t.TempDir()
-	return &backend.FileBackend{Path: tmpd}
-}
-
-// group config for minio-based group
-func MkGroupTempS3(t *testing.T) *server.StorageGroup {
-	back := S3Backend(t)
-	grp, err := server.NewStorageGroup("s3-"+back.Bucket, back)
+// new temp directory storage root for testing
+func NewStoreTempDir(t *testing.T) *server.StorageRoot {
+	fsys, err := local.NewFS(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	storeConf := &ocflv1.InitStoreConf{
-		Spec:        ocfl.Spec1_1,
-		Description: "test store w/ S3 backend",
-		Layout:      extension.Ext0003().(extension.Layout),
-	}
-	if err := grp.InitStorageRoot(context.Background(), "test", "test", storeConf); err != nil {
+	root := server.NewStorageRoot("test", fsys, "ocfl", &storeConf)
+	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if err := grp.SetUploadRoot("uploads"); err != nil {
-		t.Fatal(err)
-	}
-	return grp
+	return root
 }
 
+// new S3 storage root for testing
+func NewStoreS3(t *testing.T) *server.StorageRoot {
+	backend := S3Backend(t)
+	fsys, err := backend.NewFS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := server.NewStorageRoot("test", fsys, "ocfl", &storeConf)
+	if err := root.Ready(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// Temp dir backend for testing
+func TempDirBackend(t *testing.T) *backend.FileBackend {
+	return &backend.FileBackend{Path: t.TempDir()}
+}
+
+// S3 backend with temp bucket for testing
 func S3Backend(t *testing.T) *backend.S3Backend {
 	bucket, err := TempBucket(t)
 	if err != nil {

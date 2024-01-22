@@ -51,7 +51,6 @@ type pushCmd struct {
 
 func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Config, args []string) error {
 	var (
-		group    string
 		store    string
 		objectID string
 		srcDir   string
@@ -68,8 +67,6 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 	if err != nil && !errors.Is(err, cfg.ErrNotProject) {
 		return err
 	}
-	err = nil
-	group = conf.StorageGroupID(proj.StorageGroupID)
 	store = conf.StorageRootID(proj.StorageRootID)
 	objectID = cfg.First(push.objectID, proj.ObjectID)
 	srcDir = cfg.First(srcDir, proj.Path())
@@ -82,7 +79,6 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 	if !proj.Empty() {
 		ui.PrintValues("local object version", fmt.Sprintf("%s (%d)", proj.ObjectID, proj.Version))
 	}
-	cmd.Commit.GroupID = group
 	cmd.Commit.StorageRootID = store
 	cmd.Commit.ObjectID = objectID
 	cmd.Commit.User.Address = conf.UserEmail(cmd.Commit.User.Address)
@@ -101,39 +97,35 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 	return nil
 }
 
-func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *client.Commit, srcDir string, uploaderID string) error {
-	// if err := cli.StorageRootExists(ctx, com.GroupID, com.StorageRootID); err != nil {
-	// 	return err
-	// }
-	// check commit against existing object for continiuity
-	existing, err := cli.GetObjectState(ctx, com.GroupID, com.StorageRootID, com.ObjectID, 0)
+func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, commit *client.Commit, srcDir string, uploaderID string) error {
+	existing, err := cli.GetObjectState(ctx, commit.StorageRootID, commit.ObjectID, 0)
 	if err != nil && !client.IsNotFound(err) {
 		return fmt.Errorf("getting existing object state: %w", err)
 	}
 	switch {
 	case existing == nil:
 		// creating a new object
-		if com.Version > 1 {
-			return fmt.Errorf("object %q doesn't exist; can't create v %d", com.ObjectID, com.Version)
+		if commit.Version > 1 {
+			return fmt.Errorf("object %q doesn't exist. Can't create version %d", commit.ObjectID, commit.Version)
 		}
-		if com.Version == 0 {
-			com.Version = 1
+		if commit.Version == 0 {
+			commit.Version = 1
 		}
-		com.Alg = conf.DigestAlgorithm("")
+		commit.Alg = conf.DigestAlgorithm("")
 	default:
 		// updating an existing object
-		com.Version = existing.Version + 1
-		if com.Alg == "" {
-			com.Alg = existing.DigestAlgorithm
+		commit.Version = existing.Version + 1
+		if commit.Alg == "" {
+			commit.Alg = existing.DigestAlgorithm
 		}
-		if com.Alg != existing.DigestAlgorithm {
-			return fmt.Errorf("existing object %q uses %s; changing to the digest algorithm to %s is not supported",
-				com.ObjectID, existing.DigestAlgorithm, com.Alg)
+		if commit.Alg != existing.DigestAlgorithm {
+			return fmt.Errorf("object %q uses %s. Changing the digest algorithm to %s is not supported",
+				commit.ObjectID, existing.DigestAlgorithm, commit.Alg)
 		}
 	}
-	fmt.Print(ui.CommitSummary(com))
+	fmt.Print(ui.CommitSummary(commit))
 	// staging: build new object state from contents of a directory
-	stg, err := ui.RunStageDir(srcDir, com.Alg, client.StageSkipDirRE(chaparralRE))
+	stg, err := ui.RunStageDir(srcDir, commit.Alg, client.StageSkipDirRE(chaparralRE))
 	if err != nil {
 		return err
 	}
@@ -141,14 +133,14 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *clie
 	if existing != nil && reflect.DeepEqual(stg.State, existing.State) {
 		return errors.New("no change in object state")
 	}
-	com.State = stg.State
+	commit.State = stg.State
 
 	// print diff
 	var changes delta.Result
 	if existing == nil {
-		changes, _ = delta.Diff(nil, com.State)
+		changes, _ = delta.Diff(nil, commit.State)
 	} else {
-		changes, _ = delta.Diff(existing.State, com.State)
+		changes, _ = delta.Diff(existing.State, commit.State)
 	}
 	fmt.Print(ui.PrettyDiff(changes))
 
@@ -170,13 +162,13 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *clie
 		if err != nil {
 			return err
 		}
-		if !slices.Contains(uploader.DigestAlgorithms, com.Alg) {
-			return fmt.Errorf("uploader doesn't include %s", com.Alg)
+		if !slices.Contains(uploader.DigestAlgorithms, commit.Alg) {
+			return fmt.Errorf("uploader doesn't include %s", commit.Alg)
 		}
 		// don't upload files that are already in the uploader
 		for file, digest := range uploadFiles {
 			if slices.ContainsFunc(uploader.Uploads, func(u client.Upload) bool {
-				return u.Digests[com.Alg] == digest
+				return u.Digests[commit.Alg] == digest
 			}) {
 				delete(uploadFiles, file)
 			}
@@ -184,8 +176,8 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *clie
 	}
 	if len(uploadFiles) > 0 && uploader == nil {
 		// try to create new uploader
-		upName := path.Join(com.GroupID, com.StorageRootID, com.ObjectID)
-		uploader, err = cli.NewUploader(ctx, com.GroupID, []string{com.Alg}, upName)
+		upName := path.Join(commit.StorageRootID, commit.ObjectID)
+		uploader, err = cli.NewUploader(ctx, []string{commit.Alg}, upName)
 		if err != nil {
 			return err
 		}
@@ -222,12 +214,12 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, com *clie
 		fmt.Println("no files need to be uploaded")
 	}
 	// confirm commit
-	if !ui.RunConfirmCommit(com) {
+	if !ui.RunConfirmCommit(commit) {
 		return pushErr
 	}
 	// finalize
 	fmt.Println("This may take a while. You may safely close the program (with ctrl+c).")
-	if err := cli.CommitUploader(ctx, com, uploader); err != nil {
+	if err := cli.CommitUploader(ctx, commit, uploader); err != nil {
 		pushErr = fmt.Errorf("while writing object: %w", err)
 		return pushErr
 	}

@@ -23,7 +23,6 @@ func TestSQLiteDB(t *testing.T) {
 			ID:        "uploader",
 			CreatedAt: time.Now().UTC(),
 			Config: uploader.Config{
-				RootID:      "root",
 				UserID:      "user",
 				Algs:        []string{"sha512", "md5"},
 				Description: "description",

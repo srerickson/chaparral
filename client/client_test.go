@@ -16,10 +16,10 @@ import (
 )
 
 func TestClientNewUploader(t *testing.T) {
-	testFn := func(t *testing.T, htc *http.Client, url string, group *server.StorageGroup) {
+	testFn := func(t *testing.T, htc *http.Client, url string, store *server.StorageRoot) {
 		ctx := context.Background()
 		cli := chap.NewClient(htc, url)
-		up, err := cli.NewUploader(ctx, group.ID(), []string{"sha256"}, "test")
+		up, err := cli.NewUploader(ctx, []string{"sha256"}, "test")
 		be.NilErr(t, err)
 		defer func() {
 			be.NilErr(t, cli.DeleteUploader(ctx, up.ID))
@@ -35,16 +35,14 @@ func TestClientNewUploader(t *testing.T) {
 }
 
 func TestClientCommit(t *testing.T) {
-	testFn := func(t *testing.T, htc *http.Client, url string, group *server.StorageGroup) {
+	testFn := func(t *testing.T, htc *http.Client, url string, store *server.StorageRoot) {
 		ctx := context.Background()
 		cli := chap.NewClient(htc, url)
-		groupID := group.ID()
-		storeID := "test"
 		fixture := filepath.Join("..", "testdata", "spec-ex-full")
 		obj1, obj2 := "object-01", "object-02"
 
 		t.Run("commit v1", func(t *testing.T) {
-			up, err := cli.NewUploader(ctx, groupID, []string{ocfl.SHA256}, "test v1")
+			up, err := cli.NewUploader(ctx, []string{ocfl.SHA256}, "test v1")
 			be.NilErr(t, err)
 			defer func() {
 				be.NilErr(t, cli.DeleteUploader(ctx, up.ID))
@@ -53,8 +51,7 @@ func TestClientCommit(t *testing.T) {
 			be.NilErr(t, err)
 			be.NilErr(t, cli.UploadStage(ctx, up, stage))
 			commit := &chap.Commit{
-				GroupID:       groupID,
-				StorageRootID: storeID,
+				StorageRootID: store.ID(),
 				ObjectID:      obj1,
 				State:         stage.State,
 				Alg:           stage.Alg,
@@ -66,9 +63,8 @@ func TestClientCommit(t *testing.T) {
 				Message: "test commit 1",
 			}
 			be.NilErr(t, cli.CommitUploader(ctx, commit, up))
-			state, err := cli.GetObjectState(ctx, groupID, storeID, obj1, 0)
+			state, err := cli.GetObjectState(ctx, store.ID(), obj1, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.GroupID, state.GroupId)
 			be.Equal(t, commit.StorageRootID, state.StorageRootID)
 			be.Equal(t, commit.ObjectID, state.ObjectID)
 			be.Equal(t, commit.Version, state.Head)
@@ -78,7 +74,7 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.Message, state.Messsage)
 			be.DeepEqual(t, commit.User, state.User)
 			for _, digest := range state.State {
-				f, err := cli.GetContent(ctx, groupID, storeID, obj1, digest, "")
+				f, err := cli.GetContent(ctx, store.ID(), obj1, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
@@ -87,7 +83,7 @@ func TestClientCommit(t *testing.T) {
 		})
 
 		t.Run("commit v2", func(t *testing.T) {
-			up, err := cli.NewUploader(ctx, groupID, []string{ocfl.SHA256}, "test v2")
+			up, err := cli.NewUploader(ctx, []string{ocfl.SHA256}, "test v2")
 			be.NilErr(t, err)
 			defer func() {
 				be.NilErr(t, cli.DeleteUploader(ctx, up.ID))
@@ -96,8 +92,7 @@ func TestClientCommit(t *testing.T) {
 			be.NilErr(t, err)
 			be.NilErr(t, cli.UploadStage(ctx, up, stage))
 			commit := &chap.Commit{
-				GroupID:       groupID,
-				StorageRootID: storeID,
+				StorageRootID: store.ID(),
 				ObjectID:      obj1,
 				State:         stage.State,
 				Alg:           stage.Alg,
@@ -109,9 +104,8 @@ func TestClientCommit(t *testing.T) {
 				Message: "test commit 2",
 			}
 			be.NilErr(t, cli.CommitUploader(ctx, commit, up))
-			state, err := cli.GetObjectState(ctx, groupID, storeID, obj1, 0)
+			state, err := cli.GetObjectState(ctx, store.ID(), obj1, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.GroupID, state.GroupId)
 			be.Equal(t, commit.StorageRootID, state.StorageRootID)
 			be.Equal(t, commit.ObjectID, state.ObjectID)
 			be.Equal(t, commit.Version, state.Head)
@@ -121,7 +115,7 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.Message, state.Messsage)
 			be.DeepEqual(t, commit.User, state.User)
 			for _, digest := range state.State {
-				f, err := cli.GetContent(ctx, groupID, storeID, obj1, digest, "")
+				f, err := cli.GetContent(ctx, store.ID(), obj1, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
@@ -130,11 +124,10 @@ func TestClientCommit(t *testing.T) {
 		})
 
 		t.Run("fork object", func(t *testing.T) {
-			obj1State, err := cli.GetObjectState(ctx, groupID, storeID, obj1, 0)
+			obj1State, err := cli.GetObjectState(ctx, store.ID(), obj1, 0)
 			be.NilErr(t, err)
 			commit := &chap.Commit{
-				GroupID:       groupID,
-				StorageRootID: storeID,
+				StorageRootID: store.ID(),
 				ObjectID:      obj2,
 				Version:       1,
 				Alg:           obj1State.DigestAlgorithm,
@@ -145,10 +138,9 @@ func TestClientCommit(t *testing.T) {
 				},
 				Message: "test fork",
 			}
-			be.NilErr(t, cli.CommitFork(ctx, commit, groupID, storeID, obj1))
-			state, err := cli.GetObjectState(ctx, groupID, storeID, obj2, 0)
+			be.NilErr(t, cli.CommitFork(ctx, commit, store.ID(), obj1))
+			state, err := cli.GetObjectState(ctx, store.ID(), obj2, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.GroupID, state.GroupId)
 			be.Equal(t, commit.StorageRootID, state.StorageRootID)
 			be.Equal(t, commit.ObjectID, state.ObjectID)
 			be.Equal(t, commit.Version, state.Head)
@@ -157,7 +149,7 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.Message, state.Messsage)
 			be.DeepEqual(t, commit.User, state.User)
 			for _, digest := range state.State {
-				f, err := cli.GetContent(ctx, groupID, storeID, obj2, digest, "")
+				f, err := cli.GetContent(ctx, store.ID(), obj2, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)

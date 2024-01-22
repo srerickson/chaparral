@@ -10,6 +10,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/srerickson/chaparral"
+	"github.com/srerickson/chaparral/server"
+	"github.com/srerickson/chaparral/server/backend"
+	"github.com/srerickson/chaparral/server/chapdb"
+	"github.com/srerickson/chaparral/server/uploader"
+	"github.com/srerickson/ocfl-go"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -18,14 +24,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/srerickson/chaparral"
-	"github.com/srerickson/chaparral/server"
-	"github.com/srerickson/chaparral/server/backend"
-	"github.com/srerickson/chaparral/server/chapdb"
-	"github.com/srerickson/ocfl-go"
-	"github.com/srerickson/ocfl-go/extension"
-	"github.com/srerickson/ocfl-go/ocflv1"
 
 	"github.com/go-chi/httplog/v2"
 	"github.com/kkyr/fig"
@@ -38,7 +36,7 @@ var configFile = flag.String("c", "", "config file")
 type config struct {
 	Backend string `fig:"backend" default:"file://."`
 	Roots   []root `fig:"roots"`
-	Uploads string `fig:"uploads" default:"uploads"`
+	Uploads string `fig:"uploads"`
 	Listen  string `fig:"listen"`
 	StateDB string `fig:"db" default:"chaparral.sqlite3"`
 	AuthPEM string `fig:"auth_pem" default:"chaparral.pem"`
@@ -50,11 +48,10 @@ type config struct {
 type root struct {
 	ID   string `fig:"id"`
 	Path string `fig:"path" validate:"required"`
-	Init struct {
+	Init *struct {
 		Layout      string `fig:"layout" default:"0002-flat-direct-storage-layout"`
 		Description string `fig:"description"`
 	} `fig:"init"`
-	NoInit bool `fig:"no_init"`
 }
 
 var loggerOptions = httplog.Options{
@@ -90,64 +87,63 @@ func main() {
 		logger.Error(fmt.Sprintf("initializing backend: %v", err))
 		os.Exit(1)
 	}
+	fsys, err := backend.NewFS()
+	if err != nil {
+		logger.Error(fmt.Sprintf("backend configuration has errors: %v", err))
+		return
+	}
 	if ok, err := backend.IsAccessible(); !ok {
 		logger.Error(fmt.Sprintf("backend not accessible: %v", err), "storage", conf.Backend)
 	}
-
-	defaultGrp, err := server.NewStorageGroup("", backend)
-	if err != nil {
-		logger.Error(fmt.Sprintf("initializing storage group: %v", err))
-		os.Exit(1)
-	}
-	for _, rootConig := range conf.Roots {
-		switch {
-		case rootConig.NoInit:
-			if err := defaultGrp.AddStorageRoot(rootConig.ID, rootConig.Path); err != nil {
-				logger.Error(fmt.Sprintf("can't use OCFL Root: %v", err))
-				os.Exit(1)
-			}
-		default:
-			layout, err := extension.Get(rootConig.Init.Layout)
-			if err != nil {
-				logger.Error(fmt.Sprintf("invalid config for OCFL root: %v", err))
-				os.Exit(1)
-			}
-			config := &ocflv1.InitStoreConf{
-				Layout:      layout.(extension.Layout),
-				Description: rootConig.Init.Description,
-				Spec:        ocfl.Spec1_1,
-			}
-			if err := defaultGrp.InitStorageRoot(context.Background(), rootConig.ID, rootConig.Path, config); err != nil {
-				logger.Error(fmt.Sprintf("initializing default OCFL Root: %v", err))
-				os.Exit(1)
+	var rootPaths []string
+	var roots []*server.StorageRoot
+	for _, rootConfig := range conf.Roots {
+		var init *server.StorageInitializer
+		if rootConfig.Init != nil {
+			init = &server.StorageInitializer{
+				Description: rootConfig.Init.Description,
+				Layout:      rootConfig.Init.Layout,
 			}
 		}
+		r := server.NewStorageRoot(rootConfig.ID, fsys, rootConfig.Path, init)
+		roots = append(roots, r)
+		rootPaths = append(rootPaths, rootConfig.Path)
 	}
 
-	if conf.Uploads != "" {
-		if err := defaultGrp.SetUploadRoot(conf.Uploads); err != nil {
-			logger.Error(fmt.Sprintf("initializing upload storage: %v", err))
-			os.Exit(1)
-		}
-	}
 	// authentication config (load RSA key used in JWS signing)
 	authKey, err := loadRSAKey(conf.AuthPEM)
 	if err != nil {
 		logger.Error("error loading auth keyfile", "error", err.Error())
 		os.Exit(1)
 	}
+	// sqlite3 for server state
 	db, err := chapdb.Open("sqlite3", conf.StateDB, true)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
 	defer db.Close()
+	chapDB := (*chapdb.SQLiteDB)(db)
+
+	// upload manager is required for allowing uploads
+	var mgr *uploader.Manager
+	if conf.Uploads != "" {
+		mgr = uploader.NewManager(fsys, conf.Uploads, chapDB)
+		rootPaths = append(rootPaths, conf.Uploads)
+	}
+
+	if pathConflict(rootPaths...) {
+		err := fmt.Errorf("storage root and uploader paths have conflicts: %s", strings.Join(rootPaths, ", "))
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+
 	mux := server.New(
+		server.WithStorageRoots(roots...),
+		server.WithUploaderManager(mgr),
 		server.WithLogger(logger.Logger),
 		server.WithAuthUserFunc(server.DefaultAuthUserFunc(&authKey.PublicKey)),
 		server.WithAuthorizer(server.DefaultPermissions()),
-		server.WithStorageGroups(defaultGrp),
-		server.WithSQLDB(db),
 		server.WithMiddleware(
 			// log all requests
 			httplog.RequestLogger(logger),
@@ -173,7 +169,8 @@ func main() {
 	}
 
 	logger.Info("starting server",
-		"code_version", chaparral.Commit,
+		"version", chaparral.VERSION,
+		"code_version", chaparral.CODE_VERSION,
 		"storage", conf.Backend,
 		"root", conf.Roots,
 		"uploads", conf.Uploads,
@@ -211,7 +208,7 @@ func main() {
 		srvErr = httpSrv.ListenAndServe()
 	default:
 		httpSrv.Handler = mux
-		httpSrv.ListenAndServeTLS("", "")
+		srvErr = httpSrv.ListenAndServeTLS("", "")
 	}
 	if errors.Is(http.ErrServerClosed, srvErr) {
 		srvErr = nil
@@ -221,7 +218,13 @@ func main() {
 	}
 }
 
-func newBackend(storage string) (server.Backend, error) {
+type Backend interface {
+	Name() string
+	IsAccessible() (bool, error)
+	NewFS() (ocfl.WriteFS, error)
+}
+
+func newBackend(storage string) (Backend, error) {
 	kind, loc, _ := strings.Cut(storage, "://")
 	switch kind {
 	case "file":
@@ -316,4 +319,18 @@ func newTLSConfig(crt, key, clientCA string) (*tls.Config, error) {
 		}
 	}
 	return tlsCfg, nil
+}
+
+func pathConflict(paths ...string) bool {
+	for i, a := range paths {
+		for _, b := range paths[i+1:] {
+			if a == b {
+				return true
+			}
+			if a == "." || b == "." || strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
+				return true
+			}
+		}
+	}
+	return false
 }
