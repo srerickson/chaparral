@@ -21,6 +21,54 @@ func (q *Queries) CountUploaders(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createObject = `-- name: CreateObject :one
+INSERT INTO objects (
+    store_id,
+    ocfl_id,
+    path,
+    head,
+    spec,
+    alg
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+ON CONFLICT(store_id, ocfl_id) DO UPDATE SET
+    path=?3,
+    head=?4,
+    spec=?5,
+    alg=?6
+RETURNING id, store_id, ocfl_id, path, head, spec, alg
+`
+
+type CreateObjectParams struct {
+	StoreID string
+	OcflID  string
+	Path    string
+	Head    int64
+	Spec    string
+	Alg     string
+}
+
+func (q *Queries) CreateObject(ctx context.Context, arg CreateObjectParams) (Object, error) {
+	row := q.db.QueryRowContext(ctx, createObject,
+		arg.StoreID,
+		arg.OcflID,
+		arg.Path,
+		arg.Head,
+		arg.Spec,
+		arg.Alg,
+	)
+	var i Object
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OcflID,
+		&i.Path,
+		&i.Head,
+		&i.Spec,
+		&i.Alg,
+	)
+	return i, err
+}
+
 const createUpload = `-- name: CreateUpload :one
 INSERT INTO uploads (
     id, 
@@ -111,6 +159,30 @@ DELETE from uploads where uploader_id = ?
 func (q *Queries) DeleteUploads(ctx context.Context, uploaderID string) error {
 	_, err := q.db.ExecContext(ctx, deleteUploads, uploaderID)
 	return err
+}
+
+const getObject = `-- name: GetObject :one
+SELECT id, store_id, ocfl_id, path, head, spec, alg from objects WHERE store_id = ? AND ocfl_id = ?
+`
+
+type GetObjectParams struct {
+	StoreID string
+	OcflID  string
+}
+
+func (q *Queries) GetObject(ctx context.Context, arg GetObjectParams) (Object, error) {
+	row := q.db.QueryRowContext(ctx, getObject, arg.StoreID, arg.OcflID)
+	var i Object
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OcflID,
+		&i.Path,
+		&i.Head,
+		&i.Spec,
+		&i.Alg,
+	)
+	return i, err
 }
 
 const getUploader = `-- name: GetUploader :one

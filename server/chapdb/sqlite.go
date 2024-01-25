@@ -155,3 +155,28 @@ func (db *SQLiteDB) CountUploaders(ctx context.Context) (int, error) {
 	}
 	return int(n), nil
 }
+
+func (db *SQLiteDB) SetObject(ctx context.Context, storeID, objID, path string, head int, spec, alg string) error {
+	qry := sqlite.New(db.sqlDB())
+	_, err := qry.CreateObject(ctx, sqlite.CreateObjectParams{
+		StoreID: storeID,
+		OcflID:  objID,
+		Path:    path,
+		Head:    int64(head),
+		Spec:    spec,
+		Alg:     alg,
+	})
+	return err
+}
+
+func (db *SQLiteDB) GetObject(ctx context.Context, storeID, objID string) (string, error) {
+	qry := sqlite.New(db.sqlDB())
+	obj, err := qry.GetObject(ctx, sqlite.GetObjectParams{
+		StoreID: storeID,
+		OcflID:  objID,
+	})
+	if err != nil {
+		return "", err
+	}
+	return obj.Path, nil
+}
