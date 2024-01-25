@@ -27,8 +27,8 @@ CREATE TABLE versions (
 CREATE TABLE content (
     object_id INTEGER NOT NULL, -- objects table FK
     digest BLOB NOT NULL, -- digest bytes for the content
-    path TEXT NOT NULL, -- json array of paths
-    fixity BLOB, -- json object: {alg: digest}
+    path TEXT NOT NULL, -- path to content
+    fixity BLOB, -- json object with alternate digests {alg: digest}
     size INTEGER, -- may not be available
     
     PRIMARY KEY(object_id, digest)

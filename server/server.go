@@ -6,12 +6,13 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/chaparral/server/uploader"
 )
 
 // chaparral represents complete chaparral server state.
 type chaparral struct {
-	roots     map[string]*StorageRoot
+	roots     map[string]*store.StorageRoot
 	auth      Authorizer
 	uploadMgr *uploader.Manager
 }
@@ -48,11 +49,11 @@ func New(opts ...Option) *chi.Mux {
 // Option is used to configure the server mux created with New
 type Option func(*config)
 
-func WithStorageRoots(roots ...*StorageRoot) Option {
+func WithStorageRoots(roots ...*store.StorageRoot) Option {
 	return func(c *config) {
-		c.roots = make(map[string]*StorageRoot, len(roots))
+		c.roots = make(map[string]*store.StorageRoot, len(roots))
 		for _, g := range roots {
-			c.roots[g.id] = g
+			c.roots[g.ID()] = g
 		}
 	}
 }
@@ -105,7 +106,7 @@ func (c *chaparral) Close() error {
 	return nil
 }
 
-func (c *chaparral) storageRoot(id string) (*StorageRoot, error) {
+func (c *chaparral) storageRoot(id string) (*store.StorageRoot, error) {
 	if r := c.roots[id]; r != nil {
 		return r, nil
 	}

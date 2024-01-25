@@ -7,9 +7,12 @@ import "google/protobuf/timestamp.proto";
 
 // AccessService provides endpoints for reading OCFL objects.
 service AccessService {    
-    // GetObjectState returns logical state, and other information for a given
-    // OCFL object version.
+    // GetObjectState returns details about the logical state of an OCFL object
+    // version.
     rpc GetObjectState(GetObjectStateRequest) returns (GetObjectStateResponse) {}
+    // GetObjectManifest returns digests, sizes, and fixity information for all
+    // content associated with an object across all its versions.
+    rpc GetObjectManifest(GetObjectManifestRequest) returns (GetObjectManifestResponse) {}
 }
 
 // GetObjectStateRequest is used to request information about an object's state.
@@ -37,9 +40,9 @@ message GetObjectStateResponse {
     int32 head = 4;
     // The object's digest algorithm (sha512 or sha256)
     string digest_algorithm = 5;
-    // The object's logical state represented as a map from file paths to digest
-    // values using the object's digest algorithm.
-    map<string,string> state = 6;
+    // The object's logical state represented as a map from digests to 
+    // file info
+    map<string,FileInfo> state = 6;
     // The message associated with the object version
     string messsage = 7;
     // The user information associated with the object version
@@ -48,4 +51,39 @@ message GetObjectStateResponse {
     google.protobuf.Timestamp created = 9;
     // The OCFL specification version for the object version.
     string spec = 10;
+}
+
+
+// GetObjectManifestRequest is used to request details about all content files
+// in an object
+message GetObjectManifestRequest{
+    // The storage root id for the object to access. If not set, the default
+    // storage root is used.
+    string storage_root_id = 1;
+    // The object id to access (required).
+    string object_id = 2;
+}
+
+
+// GetObjectManifestResponse represents all content files stored 
+// in an object across all versions
+message GetObjectManifestResponse{
+    // The storage root id for the object
+    string storage_root_id = 1;
+    // The object id for the manifest
+    string object_id = 2;
+    // digest algorithm used for manifest keys
+    string alg = 3;
+    // manifest is a map of digest values to Item info
+    map<string,FileInfo> manifest = 4;
+}
+
+
+message FileInfo {
+    // file size
+    int64 size = 1;
+    // content file paths relative to the object root
+    repeated string paths = 2;
+    // map of alternate digests alg -> digest
+    map<string,string> fixity = 3;
 }

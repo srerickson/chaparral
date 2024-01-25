@@ -13,6 +13,7 @@ import (
 	"github.com/bufbuild/connect-go"
 	chaparralv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	"github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
+	"github.com/srerickson/chaparral/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -75,12 +76,20 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		Spec:            obj.Spec.String(),
 		Messsage:        obj.Message,
 		Created:         timestamppb.New(obj.Created),
-		State:           obj.State.PathMap(),
+	}
+	for _, d := range obj.State.Digests() {
+		resp.State[d] = &chaparralv1.FileInfo{
+			Paths: obj.State.DigestPaths(d),
+		}
 	}
 	if obj.User != nil {
 		resp.User = (*User)(obj.User).AsProto()
 	}
 	return connect.NewResponse(resp), nil
+}
+
+func (srv *AccessService) GetObjectManifest(ctx context.Context, req *connect.Request[chaparralv1.GetObjectManifestRequest]) (*connect.Response[chaparralv1.GetObjectManifestResponse], error) {
+	return nil, errors.New("not implemented")
 }
 
 func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +118,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	store, err := srv.storageRoot(storeID)
+	root, err := srv.storageRoot(storeID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -126,7 +135,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// make sure storage root's base is initialized
-	if err = store.Ready(ctx); err != nil {
+	if err = root.Ready(ctx); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -134,8 +143,8 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	case contentPath == "":
 		// get contentPath using digest
 		// TODO: use a cache
-		var obj *ObjectState
-		obj, err = store.GetObjectState(ctx, objectID, 0)
+		var obj *store.ObjectState
+		obj, err = root.GetObjectState(ctx, objectID, 0)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				w.WriteHeader(http.StatusNotFound)
@@ -161,15 +170,15 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 		var objPath string
-		objPath, err = store.ResolveID(objectID)
+		objPath, err = root.ResolveID(objectID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		objectRoot = path.Join(store.Path(), objPath)
+		objectRoot = path.Join(root.Path(), objPath)
 	}
 	fullPath := path.Join(objectRoot, contentPath)
-	f, err := store.FS().OpenFile(ctx, fullPath)
+	f, err := root.FS().OpenFile(ctx, fullPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			w.WriteHeader(http.StatusNotFound)

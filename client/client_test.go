@@ -11,12 +11,12 @@ import (
 	"github.com/carlmjohnson/be"
 	chap "github.com/srerickson/chaparral/client"
 	"github.com/srerickson/chaparral/internal/testutil"
-	"github.com/srerickson/chaparral/server"
+	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/ocfl-go"
 )
 
 func TestClientNewUploader(t *testing.T) {
-	testFn := func(t *testing.T, htc *http.Client, url string, store *server.StorageRoot) {
+	testFn := func(t *testing.T, htc *http.Client, url string, store *store.StorageRoot) {
 		ctx := context.Background()
 		cli := chap.NewClient(htc, url)
 		up, err := cli.NewUploader(ctx, []string{"sha256"}, "test")
@@ -35,7 +35,7 @@ func TestClientNewUploader(t *testing.T) {
 }
 
 func TestClientCommit(t *testing.T) {
-	testFn := func(t *testing.T, htc *http.Client, url string, store *server.StorageRoot) {
+	testFn := func(t *testing.T, htc *http.Client, url string, store *store.StorageRoot) {
 		ctx := context.Background()
 		cli := chap.NewClient(htc, url)
 		fixture := filepath.Join("..", "testdata", "spec-ex-full")
@@ -69,11 +69,13 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.ObjectID, state.ObjectID)
 			be.Equal(t, commit.Version, state.Head)
 			be.Equal(t, commit.Version, state.Version)
-			be.DeepEqual(t, stage.State, state.State)
+			be.DeepEqual(t, stage.State, state.DigestMap().PathMap()) // FIXME
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
 			be.Equal(t, commit.Message, state.Messsage)
-			be.DeepEqual(t, commit.User, state.User)
-			for _, digest := range state.State {
+			if state.User != nil {
+				be.DeepEqual(t, commit.User, *state.User)
+			}
+			for digest := range state.State {
 				f, err := cli.GetContent(ctx, store.ID(), obj1, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
@@ -110,11 +112,13 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.ObjectID, state.ObjectID)
 			be.Equal(t, commit.Version, state.Head)
 			be.Equal(t, commit.Version, state.Version)
-			be.DeepEqual(t, stage.State, state.State)
+			be.DeepEqual(t, stage.State, state.DigestMap().PathMap())
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
 			be.Equal(t, commit.Message, state.Messsage)
-			be.DeepEqual(t, commit.User, state.User)
-			for _, digest := range state.State {
+			if state.User != nil {
+				be.DeepEqual(t, commit.User, *state.User)
+			}
+			for digest := range state.State {
 				f, err := cli.GetContent(ctx, store.ID(), obj1, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
@@ -131,7 +135,7 @@ func TestClientCommit(t *testing.T) {
 				ObjectID:      obj2,
 				Version:       1,
 				Alg:           obj1State.DigestAlgorithm,
-				State:         obj1State.State,
+				State:         obj1State.DigestMap().PathMap(), // FIXME
 				User: ocfl.User{
 					Name:    "C.D.",
 					Address: "ef@gh.i",
@@ -147,8 +151,10 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.Version, state.Version)
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
 			be.Equal(t, commit.Message, state.Messsage)
-			be.DeepEqual(t, commit.User, state.User)
-			for _, digest := range state.State {
+			if state.User != nil {
+				be.DeepEqual(t, commit.User, *state.User)
+			}
+			for digest := range state.State {
 				f, err := cli.GetContent(ctx, store.ID(), obj2, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)

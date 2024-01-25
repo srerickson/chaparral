@@ -20,6 +20,7 @@ import (
 	"github.com/srerickson/chaparral/server"
 	"github.com/srerickson/chaparral/server/backend"
 	"github.com/srerickson/chaparral/server/chapdb"
+	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/chaparral/server/uploader"
 	"github.com/srerickson/ocfl-go/backend/local"
 	"github.com/srerickson/ocfl-go/extension"
@@ -27,13 +28,13 @@ import (
 
 var (
 	s3Env     = "CHAPARRAL_TEST_S3"
-	storeConf = server.StorageInitializer{
+	storeConf = store.StorageInitializer{
 		Description: "test store",
 		Layout:      extension.Ext0003().Name(),
 	}
 )
 
-type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, store *server.StorageRoot)
+type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, store *store.StorageRoot)
 
 func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{}))
@@ -105,13 +106,13 @@ func S3Session() (*s3.S3, error) {
 }
 
 // Testdata storage root
-func NewStoreTestdata(t *testing.T, testdataPath string) *server.StorageRoot {
+func NewStoreTestdata(t *testing.T, testdataPath string) *store.StorageRoot {
 	fsys, err := local.NewFS(testdataPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir := path.Join("storage-roots", "root-01")
-	root := server.NewStorageRoot("test", fsys, dir, nil)
+	root := store.NewStorageRoot("test", fsys, dir, nil)
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -119,12 +120,12 @@ func NewStoreTestdata(t *testing.T, testdataPath string) *server.StorageRoot {
 }
 
 // new temp directory storage root for testing
-func NewStoreTempDir(t *testing.T) *server.StorageRoot {
+func NewStoreTempDir(t *testing.T) *store.StorageRoot {
 	fsys, err := local.NewFS(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := server.NewStorageRoot("test", fsys, "ocfl", &storeConf)
+	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf)
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -132,13 +133,13 @@ func NewStoreTempDir(t *testing.T) *server.StorageRoot {
 }
 
 // new S3 storage root for testing
-func NewStoreS3(t *testing.T) *server.StorageRoot {
+func NewStoreS3(t *testing.T) *store.StorageRoot {
 	backend := S3Backend(t)
 	fsys, err := backend.NewFS()
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := server.NewStorageRoot("test", fsys, "ocfl", &storeConf)
+	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf)
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}

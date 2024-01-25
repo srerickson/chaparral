@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bufbuild/connect-go"
+	"github.com/srerickson/chaparral"
 	chapv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	chapv1connect "github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
 	"github.com/srerickson/chaparral/server"
@@ -227,29 +227,22 @@ func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Upload
 	return nil
 }
 
-type ObjectState struct {
-	StorageRootID   string
-	ObjectID        string
-	Spec            string
-	Version         int
-	DigestAlgorithm string
-	Head            int
-	State           map[string]string
-	Messsage        string
-	User            ocfl.User
-	Created         time.Time
-}
-
-func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
-	state := &ObjectState{
+func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *chaparral.ObjectState {
+	state := &chaparral.ObjectState{
 		StorageRootID:   proto.StorageRootId,
 		ObjectID:        proto.ObjectId,
 		Spec:            proto.Spec,
 		Version:         int(proto.Version),
 		DigestAlgorithm: proto.DigestAlgorithm,
 		Head:            int(proto.Head),
-		State:           maps.Clone(proto.State),
 		Messsage:        proto.Messsage,
+	}
+	for digest, info := range proto.State {
+		state.State[digest] = chaparral.FileInfo{
+			Size:   info.Size,
+			Paths:  info.Paths,
+			Fixity: info.Fixity,
+		}
 	}
 	if proto.Created != nil {
 		state.Created = proto.Created.AsTime()
@@ -261,7 +254,7 @@ func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
 	return state
 }
 
-func (cli Client) GetObjectState(ctx context.Context, storeID string, objectID string, ver int) (*ObjectState, error) {
+func (cli Client) GetObjectState(ctx context.Context, storeID string, objectID string, ver int) (*chaparral.ObjectState, error) {
 	req := &chapv1.GetObjectStateRequest{
 		StorageRootId: storeID,
 		ObjectId:      objectID,

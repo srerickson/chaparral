@@ -56,7 +56,13 @@ func TestAccessServiceHandler(t *testing.T) {
 		})
 		resp, err := chap.GetObjectState(ctx, req)
 		be.NilErr(t, err)
-		be.DeepEqual(t, resp.Msg.State, expectState.PathMap())
+		got := map[string]string{}
+		for d, info := range resp.Msg.State {
+			for _, p := range info.Paths {
+				got[p] = d
+			}
+		}
+		be.DeepEqual(t, expectState.PathMap(), got)
 	})
 
 	t.Run("download by content path", func(t *testing.T) {

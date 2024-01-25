@@ -16,6 +16,7 @@ import (
 	chapv1connect "github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
 	"github.com/srerickson/chaparral/internal/testutil"
 	"github.com/srerickson/chaparral/server"
+	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/ocfl-go"
 	"golang.org/x/exp/slices"
 )
@@ -25,7 +26,7 @@ const size = 2_000_000
 var _ chapv1connect.CommitServiceHandler = (*server.CommitService)(nil)
 
 func TestCommitServiceCommit(t *testing.T) {
-	test := func(t *testing.T, htc *http.Client, url string, store *server.StorageRoot) {
+	test := func(t *testing.T, htc *http.Client, url string, store *store.StorageRoot) {
 		ctx := context.Background()
 		chap := chapv1connect.NewCommitServiceClient(htc, url)
 		alg := `sha256`
@@ -79,7 +80,7 @@ func TestCommitServiceCommit(t *testing.T) {
 }
 
 func TestCommitServiceUploader(t *testing.T) {
-	testutil.RunServiceTest(t, func(t *testing.T, htc *http.Client, url string, store *server.StorageRoot) {
+	testutil.RunServiceTest(t, func(t *testing.T, htc *http.Client, url string, store *store.StorageRoot) {
 		times := 4 // concurrent uploaders
 		wg := sync.WaitGroup{}
 		wg.Add(times)
@@ -94,7 +95,7 @@ func TestCommitServiceUploader(t *testing.T) {
 }
 
 // test creating an uploader, uploading to it, accessing it, and destroying it
-func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, store *server.StorageRoot) {
+func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, store *store.StorageRoot) {
 	ctx := context.Background()
 	chapClient := chapv1connect.NewCommitServiceClient(htc, baseURL)
 	// create new uploader

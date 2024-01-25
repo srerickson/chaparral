@@ -1,4 +1,4 @@
-package server
+package store
 
 import (
 	"context"
@@ -112,6 +112,32 @@ func (store *StorageRoot) ResolveID(id string) (string, error) {
 	return store.base.ResolveID(id)
 }
 
+type objectState struct {
+	ID      string
+	StoreID string
+	Version int
+	Head    int
+	Spec    ocfl.Spec
+	Alg     string
+	User    *ocfl.User
+	Message string
+	Created time.Time
+	State   map[string]contentInfo
+}
+
+type objectManifest struct {
+	ID       string
+	StoreID  string
+	Alg      string
+	Manifest map[string]contentInfo
+}
+
+type contentInfo struct {
+	Paths  []string
+	Fixity map[string]string
+	Size   int64
+}
+
 // ObjectState represent an OCFL Object with a specific version state.
 type ObjectState struct {
 	FS       ocfl.FS
@@ -131,7 +157,9 @@ type ObjectState struct {
 }
 
 func (objState *ObjectState) Close() error {
-	objState.close()
+	if objState.close != nil {
+		objState.close()
+	}
 	return nil
 }
 
