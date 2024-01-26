@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/srerickson/chaparral"
 	"github.com/srerickson/chaparral/server/internal/lock"
 	ocfl "github.com/srerickson/ocfl-go"
 	"github.com/srerickson/ocfl-go/extension"
@@ -112,48 +113,19 @@ func (store *StorageRoot) ResolveID(id string) (string, error) {
 	return store.base.ResolveID(id)
 }
 
-type objectState struct {
+// ObjectState represent an OCFL Object with a specific version state.
+type ObjectState struct {
+	Path    string
 	ID      string
-	StoreID string
 	Version int
 	Head    int
 	Spec    ocfl.Spec
 	Alg     string
-	User    *ocfl.User
+	State   map[string]chaparral.FileInfo
 	Message string
+	User    *ocfl.User
 	Created time.Time
-	State   map[string]contentInfo
-}
-
-type objectManifest struct {
-	ID       string
-	StoreID  string
-	Alg      string
-	Manifest map[string]contentInfo
-}
-
-type contentInfo struct {
-	Paths  []string
-	Fixity map[string]string
-	Size   int64
-}
-
-// ObjectState represent an OCFL Object with a specific version state.
-type ObjectState struct {
-	FS       ocfl.FS
-	Path     string
-	ID       string
-	Version  int
-	Head     int
-	Spec     ocfl.Spec
-	Alg      string
-	State    ocfl.DigestMap
-	Manifest ocfl.DigestMap
-	Message  string
-	User     *ocfl.User
-	Created  time.Time
-	Fixity   map[string]ocfl.DigestMap
-	close    func()
+	close   func()
 }
 
 func (objState *ObjectState) Close() error {
@@ -188,22 +160,68 @@ func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v
 		return nil, fmt.Errorf("version index %d not found", verIndex)
 	}
 	objState := ObjectState{
-		FS:       obj.ObjectRoot.FS,
+		Path:    obj.ObjectRoot.Path,
+		ID:      obj.Inventory.ID,
+		Alg:     obj.Inventory.DigestAlgorithm,
+		Spec:    obj.Inventory.Type.Spec,
+		Head:    obj.Inventory.Head.Num(),
+		Version: verIndex,
+		State:   map[string]chaparral.FileInfo{},
+		Message: version.Message,
+		User:    version.User,
+		Created: version.Created,
+		close:   unlock,
+	}
+	for _, d := range version.State.Digests() {
+		objState.State[d] = chaparral.FileInfo{
+			Paths: version.State.DigestPaths(d),
+		}
+	}
+	return &objState, nil
+}
+
+type ObjectManifest struct {
+	Path     string
+	ID       string
+	StoreID  string
+	Alg      string
+	Manifest map[string]chaparral.FileInfo
+	close    func()
+}
+
+func (obj *ObjectManifest) Close() error {
+	if obj.close != nil {
+		obj.close()
+	}
+	return nil
+}
+
+func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string) (*ObjectManifest, error) {
+	if err := store.Ready(ctx); err != nil {
+		return nil, err
+	}
+	unlock, err := store.locker.ReadLock(objectID)
+	if err != nil {
+		return nil, err
+	}
+	obj, err := store.base.GetObject(ctx, objectID)
+	if err != nil {
+		unlock()
+		return nil, err
+	}
+	man := ObjectManifest{
 		Path:     obj.ObjectRoot.Path,
 		ID:       obj.Inventory.ID,
 		Alg:      obj.Inventory.DigestAlgorithm,
-		Spec:     obj.Inventory.Type.Spec,
-		Head:     obj.Inventory.Head.Num(),
-		Manifest: obj.Inventory.Manifest,
-		Fixity:   obj.Inventory.Fixity,
-		Version:  verIndex,
-		State:    version.State,
-		Message:  version.Message,
-		User:     version.User,
-		Created:  version.Created,
+		Manifest: map[string]chaparral.FileInfo{},
 		close:    unlock,
 	}
-	return &objState, nil
+	for _, d := range obj.Inventory.Manifest.Digests() {
+		man.Manifest[d] = chaparral.FileInfo{
+			Paths: obj.Inventory.Manifest.DigestPaths(d),
+		}
+	}
+	return &man, nil
 }
 
 func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *ocfl.Stage, opts ...ocflv1.CommitOption) error {

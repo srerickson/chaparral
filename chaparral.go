@@ -31,10 +31,8 @@ var CODE_VERSION = func() string {
 }()
 
 type ObjectState struct {
-	StorageRootID   string
-	ObjectID        string
-	Spec            string
 	Version         int
+	Spec            string
 	Head            int
 	DigestAlgorithm string
 	State           map[string]FileInfo
@@ -56,8 +54,6 @@ func (obj ObjectState) DigestMap() ocfl.DigestMap {
 }
 
 type ObjectManifest struct {
-	StorageRootID   string
-	ObjectID        string
 	DigestAlgorithm string
 	Manifest        map[string]FileInfo
 }

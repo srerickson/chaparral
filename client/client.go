@@ -227,15 +227,23 @@ func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Upload
 	return nil
 }
 
-func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *chaparral.ObjectState {
-	state := &chaparral.ObjectState{
-		StorageRootID:   proto.StorageRootId,
-		ObjectID:        proto.ObjectId,
-		Spec:            proto.Spec,
-		Version:         int(proto.Version),
-		DigestAlgorithm: proto.DigestAlgorithm,
-		Head:            int(proto.Head),
-		Messsage:        proto.Messsage,
+type ObjectState struct {
+	chaparral.ObjectState
+	StorageRootID string
+	ObjectID      string
+}
+
+func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
+	state := &ObjectState{
+		StorageRootID: proto.StorageRootId,
+		ObjectID:      proto.ObjectId,
+		ObjectState: chaparral.ObjectState{
+			Spec:            proto.Spec,
+			Version:         int(proto.Version),
+			DigestAlgorithm: proto.DigestAlgorithm,
+			Head:            int(proto.Head),
+			Messsage:        proto.Messsage,
+		},
 	}
 	for digest, info := range proto.State {
 		state.State[digest] = chaparral.FileInfo{
@@ -254,7 +262,7 @@ func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *chaparral.Objec
 	return state
 }
 
-func (cli Client) GetObjectState(ctx context.Context, storeID string, objectID string, ver int) (*chaparral.ObjectState, error) {
+func (cli Client) GetObjectState(ctx context.Context, storeID string, objectID string, ver int) (*ObjectState, error) {
 	req := &chapv1.GetObjectStateRequest{
 		StorageRootId: storeID,
 		ObjectId:      objectID,

@@ -73,7 +73,7 @@ message GetObjectManifestResponse{
     // The object id for the manifest
     string object_id = 2;
     // digest algorithm used for manifest keys
-    string alg = 3;
+    string digest_algorithm = 3;
     // manifest is a map of digest values to Item info
     map<string,FileInfo> manifest = 4;
 }

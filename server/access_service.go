@@ -77,9 +77,11 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		Messsage:        obj.Message,
 		Created:         timestamppb.New(obj.Created),
 	}
-	for _, d := range obj.State.Digests() {
+	for d, info := range obj.State {
 		resp.State[d] = &chaparralv1.FileInfo{
-			Paths: obj.State.DigestPaths(d),
+			Paths:  info.Paths,
+			Size:   info.Size,
+			Fixity: info.Fixity,
 		}
 	}
 	if obj.User != nil {
@@ -143,8 +145,8 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	case contentPath == "":
 		// get contentPath using digest
 		// TODO: use a cache
-		var obj *store.ObjectState
-		obj, err = root.GetObjectState(ctx, objectID, 0)
+		var obj *store.ObjectManifest
+		obj, err = root.GetObjectManifest(ctx, objectID)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				w.WriteHeader(http.StatusNotFound)
@@ -155,7 +157,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		}
 		defer obj.Close()
 		objectRoot = obj.Path
-		if p := obj.Manifest.DigestPaths(digest); len(p) > 0 {
+		if p := obj.Manifest[d].Paths; len(p) > 0 {
 			contentPath = p[0]
 		}
 		if contentPath == "" {

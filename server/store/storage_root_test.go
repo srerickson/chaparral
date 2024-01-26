@@ -43,7 +43,7 @@ func TestStorageRoot(t *testing.T) {
 	// commit stage that is a fork of srcObj
 	stage := ocfl.NewStage(srcObj.Alg)
 	stage.State = srcObj.State
-	stage.FS = srcObj.FS
+	stage.FS = srcRoot.FS()
 	stage.Root = srcObj.Path
 	err = stage.UnsafeSetManifestFixty(srcObj.Manifest, srcObj.Fixity)
 	be.NilErr(t, err)

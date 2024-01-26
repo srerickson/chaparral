@@ -154,7 +154,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			err = fmt.Errorf("commit declares %s, but source object was created with %s", commitAlg, srcAlg)
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
-		stage.SetFS(srcObj.FS, srcObj.Path)
+		stage.SetFS(srcStore.FS(), srcObj.Path)
 		if err = stage.UnsafeSetManifestFixty(srcObj.Manifest, srcObj.Fixity); err != nil {
 			err = fmt.Errorf("building new stage manifest from source object: %w", err)
 			return nil, connect.NewError(connect.CodeInternal, err)
