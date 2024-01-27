@@ -71,7 +71,11 @@ func TestCommitServiceCommit(t *testing.T) {
 		// check object directly
 		obj, err := store.GetObjectState(ctx, "new-01", 0)
 		be.NilErr(t, err)
-		be.Equal(t, len(filenames), obj.State.LenPaths())
+		gotPaths := 0
+		for _, info := range obj.State {
+			gotPaths += len(info.Paths)
+		}
+		be.Equal(t, len(filenames), gotPaths)
 		result, err := store.Validate(ctx)
 		be.NilErr(t, err)
 		be.NilErr(t, result.Err())

@@ -58,6 +58,8 @@ type ObjectManifest struct {
 	Manifest        map[string]FileInfo
 }
 
+type DigestMap map[string]FileInfo
+
 type FileInfo struct {
 	Size   int64
 	Paths  []string

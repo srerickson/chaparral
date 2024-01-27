@@ -189,6 +189,34 @@ type ObjectManifest struct {
 	close    func()
 }
 
+func (obj *ObjectManifest) OCFLManifestFixity() (ocfl.DigestMap, map[string]ocfl.DigestMap) {
+	// FIXME this is disgusting
+	m := map[string][]string{}
+	f := map[string]map[string][]string{}
+	for d, info := range obj.Manifest {
+		m[d] = info.Paths
+		for fixAlg, fixD := range info.Fixity {
+			if f[fixAlg] == nil {
+				f[fixAlg] = map[string][]string{}
+			}
+			f[fixAlg][fixD] = append(f[fixAlg][fixD], info.Paths...)
+		}
+
+	}
+	mp, err := ocfl.NewDigestMap(m)
+	if err != nil {
+		panic(err)
+	}
+	fixity := map[string]ocfl.DigestMap{}
+	for fixAlg, fixMap := range f {
+		fixity[fixAlg], err = ocfl.NewDigestMap(fixMap)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return mp, fixity
+}
+
 func (obj *ObjectManifest) Close() error {
 	if obj.close != nil {
 		obj.close()

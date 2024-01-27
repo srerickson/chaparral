@@ -145,7 +145,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			err := fmt.Errorf("unknown storage root for source object state: %s", src.Object.StorageRootId)
 			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
-		srcObj, err := srcStore.GetObjectState(ctx, src.Object.ObjectId, 0)
+		srcObj, err := srcStore.GetObjectManifest(ctx, src.Object.ObjectId)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("in source content: %w", err))
 		}
@@ -155,7 +155,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
 		stage.SetFS(srcStore.FS(), srcObj.Path)
-		if err = stage.UnsafeSetManifestFixty(srcObj.Manifest, srcObj.Fixity); err != nil {
+		if err = stage.UnsafeSetManifestFixty(srcObj.OCFLManifestFixity()); err != nil {
 			err = fmt.Errorf("building new stage manifest from source object: %w", err)
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
