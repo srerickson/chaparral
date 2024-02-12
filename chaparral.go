@@ -46,11 +46,7 @@ func (obj ObjectState) DigestMap() ocfl.DigestMap {
 	for d, info := range obj.State {
 		m[d] = info.Paths
 	}
-	mp, err := ocfl.NewDigestMap(m)
-	if err != nil {
-		panic(err)
-	}
-	return mp
+	return ocfl.DigestMap(m)
 }
 
 type ObjectManifest struct {

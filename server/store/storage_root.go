@@ -154,7 +154,7 @@ func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v
 	if verIndex == 0 {
 		verIndex = obj.Inventory.Head.Num()
 	}
-	version := obj.Inventory.GetVersion(verIndex)
+	version := obj.Inventory.Version(verIndex)
 	if version == nil {
 		unlock()
 		return nil, fmt.Errorf("version index %d not found", verIndex)
@@ -172,9 +172,9 @@ func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v
 		Created: version.Created,
 		close:   unlock,
 	}
-	for _, d := range version.State.Digests() {
+	for d, paths := range version.State {
 		objState.State[d] = chaparral.FileInfo{
-			Paths: version.State.DigestPaths(d),
+			Paths: paths,
 		}
 	}
 	return &objState, nil
@@ -191,8 +191,8 @@ type ObjectManifest struct {
 
 func (obj *ObjectManifest) OCFLManifestFixity() (ocfl.DigestMap, map[string]ocfl.DigestMap) {
 	// FIXME this is disgusting
-	m := map[string][]string{}
-	f := map[string]map[string][]string{}
+	m := ocfl.DigestMap{}
+	f := map[string]ocfl.DigestMap{}
 	for d, info := range obj.Manifest {
 		m[d] = info.Paths
 		for fixAlg, fixD := range info.Fixity {
@@ -203,18 +203,7 @@ func (obj *ObjectManifest) OCFLManifestFixity() (ocfl.DigestMap, map[string]ocfl
 		}
 
 	}
-	mp, err := ocfl.NewDigestMap(m)
-	if err != nil {
-		panic(err)
-	}
-	fixity := map[string]ocfl.DigestMap{}
-	for fixAlg, fixMap := range f {
-		fixity[fixAlg], err = ocfl.NewDigestMap(fixMap)
-		if err != nil {
-			panic(err)
-		}
-	}
-	return mp, fixity
+	return m, f
 }
 
 func (obj *ObjectManifest) Close() error {

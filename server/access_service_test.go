@@ -43,10 +43,7 @@ func TestAccessServiceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal("in test setup:", err)
 	}
-	expectState, err := obj.State(0)
-	if err != nil {
-		t.Fatal("in test setup:", err)
-	}
+	expectState := obj.Inventory.Version(0).State
 	t.Run("GetObjectState()", func(t *testing.T) {
 		chap := chaparralv1connect.NewAccessServiceClient(httpClient, srv.URL)
 		ctx := context.Background()

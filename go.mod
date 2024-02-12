@@ -17,7 +17,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.19
 	github.com/pressly/goose/v3 v3.17.0
 	github.com/spf13/cobra v1.8.0
-	github.com/srerickson/ocfl-go v0.0.22
+	github.com/srerickson/ocfl-go v0.0.23
 	gocloud.dev v0.34.0
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	golang.org/x/net v0.19.0

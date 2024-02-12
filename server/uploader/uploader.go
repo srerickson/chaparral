@@ -50,6 +50,52 @@ func (up *Uploader) Config() *Config {
 	}
 }
 
+type contentSourceFunc func(string) (ocfl.FS, string)
+
+func (c contentSourceFunc) GetContent(digest string) (ocfl.FS, string) {
+	return c(digest)
+}
+
+func (up *Uploader) ContentSource(alg string) ocfl.ContentSource {
+	f := func(digest string) (ocfl.FS, string) {
+		up.mx.RLock()
+		defer up.mx.RUnlock()
+		for _, upload := range up.uploads {
+			if upload.Digests[alg] == digest {
+				fs, dir := up.Root()
+				return fs, path.Join(dir, upload.Name)
+			}
+		}
+		return nil, ""
+	}
+	return contentSourceFunc(f)
+}
+
+type fixitySourceFunc func(string) ocfl.DigestSet
+
+func (c fixitySourceFunc) GetFixity(digest string) ocfl.DigestSet {
+	return c(digest)
+}
+
+func (up *Uploader) FixitySource(alg string) ocfl.FixitySource {
+	f := func(digest string) ocfl.DigestSet {
+		up.mx.RLock()
+		defer up.mx.RUnlock()
+		set := ocfl.DigestSet{}
+		for _, upload := range up.uploads {
+			if upload.Digests[alg] == digest {
+				for fixalg, fixdig := range upload.Digests {
+					if fixalg != alg {
+						set[fixalg] = fixdig
+					}
+				}
+			}
+		}
+		return set
+	}
+	return fixitySourceFunc(f)
+}
+
 func (up *Uploader) Created() time.Time {
 	return up.created
 }
