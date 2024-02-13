@@ -58,7 +58,7 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		err = errors.New("you don't have permission to read from the storage root")
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-	obj, err := store.GetObjectState(ctx, req.Msg.ObjectId, int(req.Msg.Version))
+	obj, err := store.GetObjectVersion(ctx, req.Msg.ObjectId, int(req.Msg.Version))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, connect.NewError(connect.CodeNotFound, err)
@@ -76,6 +76,7 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		Spec:            obj.Spec.String(),
 		Messsage:        obj.Message,
 		Created:         timestamppb.New(obj.Created),
+		State:           map[string]*chaparralv1.FileInfo{},
 	}
 	for d, info := range obj.State {
 		resp.State[d] = &chaparralv1.FileInfo{

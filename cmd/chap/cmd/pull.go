@@ -82,7 +82,7 @@ func (pull *pullCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Conf
 }
 
 func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, rootID, objectID, dst string) (*client.ObjectState, error) {
-	remote, err := cli.GetObjectState(ctx, rootID, objectID, pull.vNum)
+	remote, err := cli.GetObjectVersion(ctx, rootID, objectID, pull.vNum)
 	if err != nil {
 		return nil, fmt.Errorf("getting object state: %w", err)
 	}
@@ -119,7 +119,7 @@ func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, rootID, 
 
 	// dst to source
 	files := map[string]string{}
-	for fName, digest := range remote.State {
+	for fName, digest := range remote.State.PathMap() {
 		if localPathDigests[fName] == digest {
 			continue
 		}

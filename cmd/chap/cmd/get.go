@@ -74,11 +74,11 @@ func (get *getCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Config
 	digest := ""
 	if !get.pathIsContent {
 		// objSrcPath is a logical path -- convert it to a content path
-		state, err := cli.GetObjectState(ctx, storeID, objectID, get.version)
+		state, err := cli.GetObjectVersion(ctx, storeID, objectID, get.version)
 		if err != nil {
 			return err
 		}
-		digest = state.State[srcArg]
+		digest = state.State.PathMap()[srcArg]
 		if digest == "" {
 			// FIXME this shows the wrong vnum because of a bug in ocfl-go
 			return fmt.Errorf("%s: file not found in %s (%s)", srcArg, objectID, get.Version)

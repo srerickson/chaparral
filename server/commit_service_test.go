@@ -69,7 +69,7 @@ func TestCommitServiceCommit(t *testing.T) {
 		_, err = chap.Commit(ctx, connect.NewRequest(commitReq))
 		be.NilErr(t, err)
 		// check object directly
-		obj, err := store.GetObjectState(ctx, "new-01", 0)
+		obj, err := store.GetObjectVersion(ctx, "new-01", 0)
 		be.NilErr(t, err)
 		gotPaths := 0
 		for _, info := range obj.State {

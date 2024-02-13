@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"sync"
 	"time"
 
@@ -22,14 +23,14 @@ var (
 
 // StorageRoot represent an existing OCFL Storage Root
 type StorageRoot struct {
-	id      string
+	id      string        // storage root's unique ID
 	fs      ocfl.WriteFS  // backend
 	path    string        // path for storage root in fs
 	base    *ocflv1.Store // OCFL storage root
 	baseErr error         // error loading OCFL storage root
-	locker  *lock.Locker
+	locker  *lock.Locker  // object mx
 	init    *StorageInitializer
-	once    sync.Once // initialize base
+	once    sync.Once // initialize base one time
 }
 
 // StorageInitializer is used to configure new storage roots that don't exist
@@ -80,13 +81,7 @@ func (store *StorageRoot) Ready(ctx context.Context) error {
 	return store.baseErr
 }
 
-func (store *StorageRoot) FS() ocfl.WriteFS {
-	if store.base == nil {
-		return nil
-	}
-	fs, _ := store.base.Root()
-	return fs.(ocfl.WriteFS)
-}
+func (store *StorageRoot) FS() ocfl.WriteFS { return store.fs }
 
 func (store *StorageRoot) Path() string { return store.path }
 
@@ -113,32 +108,32 @@ func (store *StorageRoot) ResolveID(id string) (string, error) {
 	return store.base.ResolveID(id)
 }
 
-// ObjectState represent an OCFL Object with a specific version state.
-type ObjectState struct {
+// ObjectVersion represent an OCFL Object with a specific version state.
+type ObjectVersion struct {
 	Path    string
 	ID      string
 	Version int
 	Head    int
 	Spec    ocfl.Spec
 	Alg     string
-	State   map[string]chaparral.FileInfo
+	State   chaparral.Manifest
 	Message string
 	User    *ocfl.User
 	Created time.Time
 	close   func()
 }
 
-func (objState *ObjectState) Close() error {
+func (objState *ObjectVersion) Close() error {
 	if objState.close != nil {
 		objState.close()
 	}
 	return nil
 }
 
-// GetObjectState returns an ObjectState that supports concurrent access.
+// GetObjectVersion returns an ObjectState that supports concurrent access.
 // Commits to objectID will fail until the Close() is called on the returned
 // Object.
-func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, verIndex int) (*ObjectState, error) {
+func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string, verIndex int) (*ObjectVersion, error) {
 	if err := store.Ready(ctx); err != nil {
 		return nil, err
 	}
@@ -159,7 +154,7 @@ func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v
 		unlock()
 		return nil, fmt.Errorf("version index %d not found", verIndex)
 	}
-	objState := ObjectState{
+	objState := ObjectVersion{
 		Path:    obj.ObjectRoot.Path,
 		ID:      obj.Inventory.ID,
 		Alg:     obj.Inventory.DigestAlgorithm,
@@ -174,7 +169,8 @@ func (store *StorageRoot) GetObjectState(ctx context.Context, objectID string, v
 	}
 	for d, paths := range version.State {
 		objState.State[d] = chaparral.FileInfo{
-			Paths: paths,
+			Paths:  paths,
+			Fixity: obj.Inventory.GetFixity(d),
 		}
 	}
 	return &objState, nil
@@ -185,12 +181,13 @@ type ObjectManifest struct {
 	ID       string
 	StoreID  string
 	Alg      string
-	Manifest map[string]chaparral.FileInfo
-	close    func()
+	Manifest chaparral.Manifest
+
+	close  func()
+	parent *StorageRoot
 }
 
 func (obj *ObjectManifest) OCFLManifestFixity() (ocfl.DigestMap, map[string]ocfl.DigestMap) {
-	// FIXME this is disgusting
 	m := ocfl.DigestMap{}
 	f := map[string]ocfl.DigestMap{}
 	for d, info := range obj.Manifest {
@@ -213,6 +210,20 @@ func (obj *ObjectManifest) Close() error {
 	return nil
 }
 
+func (obj *ObjectManifest) GetFixity(digest string) ocfl.DigestSet {
+	return obj.Manifest[digest].Fixity
+}
+
+func (obj *ObjectManifest) GetContent(digest string) (ocfl.FS, string) {
+	if obj.parent == nil || obj.parent.fs == nil {
+		return nil, ""
+	}
+	if info := obj.Manifest[digest]; len(info.Paths) > 0 {
+		return obj.parent.fs, path.Join(obj.Path, info.Paths[0])
+	}
+	return nil, ""
+}
+
 func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string) (*ObjectManifest, error) {
 	if err := store.Ready(ctx); err != nil {
 		return nil, err
@@ -230,12 +241,15 @@ func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string
 		Path:     obj.ObjectRoot.Path,
 		ID:       obj.Inventory.ID,
 		Alg:      obj.Inventory.DigestAlgorithm,
-		Manifest: map[string]chaparral.FileInfo{},
-		close:    unlock,
+		Manifest: chaparral.Manifest{},
+
+		parent: store,
+		close:  unlock,
 	}
-	for _, d := range obj.Inventory.Manifest.Digests() {
+	for d, paths := range obj.Inventory.Manifest {
 		man.Manifest[d] = chaparral.FileInfo{
-			Paths: obj.Inventory.Manifest.DigestPaths(d),
+			Paths:  paths,
+			Fixity: obj.Inventory.GetFixity(d),
 		}
 	}
 	return &man, nil

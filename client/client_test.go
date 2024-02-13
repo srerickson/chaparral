@@ -63,13 +63,13 @@ func TestClientCommit(t *testing.T) {
 				Message: "test commit 1",
 			}
 			be.NilErr(t, cli.CommitUploader(ctx, commit, up))
-			state, err := cli.GetObjectState(ctx, store.ID(), obj1, 0)
+			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1, 0)
 			be.NilErr(t, err)
 			be.Equal(t, commit.StorageRootID, state.StorageRootID)
 			be.Equal(t, commit.ObjectID, state.ObjectID)
 			be.Equal(t, commit.Version, state.Head)
 			be.Equal(t, commit.Version, state.Version)
-			be.DeepEqual(t, stage.State, state.DigestMap().PathMap()) // FIXME
+			be.DeepEqual(t, stage.State, state.State.DigestMap().PathMap()) // FIXME
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
 			be.Equal(t, commit.Message, state.Messsage)
 			if state.User != nil {
@@ -106,13 +106,13 @@ func TestClientCommit(t *testing.T) {
 				Message: "test commit 2",
 			}
 			be.NilErr(t, cli.CommitUploader(ctx, commit, up))
-			state, err := cli.GetObjectState(ctx, store.ID(), obj1, 0)
+			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1, 0)
 			be.NilErr(t, err)
 			be.Equal(t, commit.StorageRootID, state.StorageRootID)
 			be.Equal(t, commit.ObjectID, state.ObjectID)
 			be.Equal(t, commit.Version, state.Head)
 			be.Equal(t, commit.Version, state.Version)
-			be.DeepEqual(t, stage.State, state.DigestMap().PathMap())
+			be.DeepEqual(t, stage.State, state.State.PathMap())
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
 			be.Equal(t, commit.Message, state.Messsage)
 			if state.User != nil {
@@ -128,14 +128,14 @@ func TestClientCommit(t *testing.T) {
 		})
 
 		t.Run("fork object", func(t *testing.T) {
-			obj1State, err := cli.GetObjectState(ctx, store.ID(), obj1, 0)
+			obj1State, err := cli.GetObjectVersion(ctx, store.ID(), obj1, 0)
 			be.NilErr(t, err)
 			commit := &chap.Commit{
 				StorageRootID: store.ID(),
 				ObjectID:      obj2,
 				Version:       1,
 				Alg:           obj1State.DigestAlgorithm,
-				State:         obj1State.DigestMap().PathMap(), // FIXME
+				State:         obj1State.State.PathMap(),
 				User: ocfl.User{
 					Name:    "C.D.",
 					Address: "ef@gh.i",
@@ -143,7 +143,7 @@ func TestClientCommit(t *testing.T) {
 				Message: "test fork",
 			}
 			be.NilErr(t, cli.CommitFork(ctx, commit, store.ID(), obj1))
-			state, err := cli.GetObjectState(ctx, store.ID(), obj2, 0)
+			state, err := cli.GetObjectVersion(ctx, store.ID(), obj2, 0)
 			be.NilErr(t, err)
 			be.Equal(t, commit.StorageRootID, state.StorageRootID)
 			be.Equal(t, commit.ObjectID, state.ObjectID)

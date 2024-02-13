@@ -107,6 +107,7 @@ func S3Session() (*s3.S3, error) {
 
 // Testdata storage root
 func NewStoreTestdata(t *testing.T, testdataPath string) *store.StorageRoot {
+	t.Helper()
 	fsys, err := local.NewFS(testdataPath)
 	if err != nil {
 		t.Fatal(err)
@@ -121,6 +122,7 @@ func NewStoreTestdata(t *testing.T, testdataPath string) *store.StorageRoot {
 
 // new temp directory storage root for testing
 func NewStoreTempDir(t *testing.T) *store.StorageRoot {
+	t.Helper()
 	fsys, err := local.NewFS(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -134,6 +136,7 @@ func NewStoreTempDir(t *testing.T) *store.StorageRoot {
 
 // new S3 storage root for testing
 func NewStoreS3(t *testing.T) *store.StorageRoot {
+	t.Helper()
 	backend := S3Backend(t)
 	fsys, err := backend.NewFS()
 	if err != nil {
@@ -153,6 +156,7 @@ func TempDirBackend(t *testing.T) *backend.FileBackend {
 
 // S3 backend with temp bucket for testing
 func S3Backend(t *testing.T) *backend.S3Backend {
+	t.Helper()
 	bucket, err := TempBucket(t)
 	if err != nil {
 		t.Fatal(err)

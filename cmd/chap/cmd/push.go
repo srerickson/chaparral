@@ -98,7 +98,7 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 }
 
 func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, commit *client.Commit, srcDir string, uploaderID string) error {
-	existing, err := cli.GetObjectState(ctx, commit.StorageRootID, commit.ObjectID, 0)
+	existing, err := cli.GetObjectVersion(ctx, commit.StorageRootID, commit.ObjectID, 0)
 	if err != nil && !client.IsNotFound(err) {
 		return fmt.Errorf("getting existing object state: %w", err)
 	}
@@ -140,7 +140,7 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, commit *c
 	if existing == nil {
 		changes, _ = delta.Diff(nil, commit.State)
 	} else {
-		changes, _ = delta.Diff(existing.State, commit.State)
+		changes, _ = delta.Diff(existing.State.PathMap(), commit.State)
 	}
 	fmt.Print(ui.PrettyDiff(changes))
 

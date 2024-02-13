@@ -33,28 +33,31 @@ func TestStorageRoot(t *testing.T) {
 
 	// the testdata storage groups has a storage root called "test" that is
 	// read-only. Used here as a content source
-	srcRoot := testutil.NewStoreTestdata(t, filepath.Join("..", "testdata"))
+	srcRoot := testutil.NewStoreTestdata(t, filepath.Join("..", "..", "testdata"))
 	be.NilErr(t, srcRoot.Ready(ctx))
 
-	srcObj, err := srcRoot.GetObjectState(ctx, "ark:123/abc", 0)
+	srcVersion, err := srcRoot.GetObjectVersion(ctx, "ark:123/abc", 0)
 	be.NilErr(t, err)
-	defer srcObj.Close()
+	defer srcVersion.Close()
+	srcManifest, err := srcRoot.GetObjectManifest(ctx, "ark:123/abc")
+	be.NilErr(t, err)
+	defer srcManifest.Close()
 
 	// commit stage that is a fork of srcObj
-	stage := ocfl.NewStage(srcObj.Alg)
-	stage.State = srcObj.State
-	stage.FS = srcRoot.FS()
-	stage.Root = srcObj.Path
-	err = stage.UnsafeSetManifestFixty(srcObj.Manifest, srcObj.Fixity)
-	be.NilErr(t, err)
+	stage := &ocfl.Stage{
+		DigestAlgorithm: srcVersion.Alg,
+	}
+	stage.State = srcVersion.State.DigestMap()
+	stage.ContentSource = srcManifest
+	stage.FixitySource = srcManifest
 
 	// test concurrent go-routines
 	errs := goGroupErrors(2, func() error {
-		return root.Commit(ctx, srcObj.ID, stage,
-			ocflv1.WithCreated(srcObj.Created),
-			ocflv1.WithMessage(srcObj.Message),
-			ocflv1.WithUser(*srcObj.User),
-			ocflv1.WithOCFLSpec(srcObj.Spec),
+		return root.Commit(ctx, srcVersion.ID, stage,
+			ocflv1.WithCreated(srcVersion.Created),
+			ocflv1.WithMessage(srcVersion.Message),
+			ocflv1.WithUser(*srcVersion.User),
+			ocflv1.WithOCFLSpec(srcVersion.Spec),
 		)
 	})
 	// should have succeeded at least once
@@ -68,12 +71,12 @@ func TestStorageRoot(t *testing.T) {
 	}))
 
 	// new object exists with expected state
-	newState, err := root.GetObjectState(ctx, srcObj.ID, 0)
+	newState, err := root.GetObjectVersion(ctx, srcVersion.ID, 0)
 	be.NilErr(t, err)
-	be.DeepEqual(t, srcObj.State, newState.State)
+	be.DeepEqual(t, srcVersion.State, newState.State)
 
 	// delete should fail because newState is not closed
-	err = root.DeleteObject(ctx, srcObj.ID)
+	err = root.DeleteObject(ctx, srcVersion.ID)
 	be.True(t, errors.Is(err, lock.ErrWriteLock))
 
 	// close newObj and check Delete()
@@ -92,7 +95,7 @@ func TestStorageRoot(t *testing.T) {
 	}))
 
 	// object is gone
-	_, err = root.GetObjectState(ctx, srcObj.ID, 0)
+	_, err = root.GetObjectVersion(ctx, srcVersion.ID, 0)
 	be.True(t, errors.Is(err, fs.ErrNotExist))
 }
 

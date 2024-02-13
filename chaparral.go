@@ -30,34 +30,40 @@ var CODE_VERSION = func() string {
 	return "none"
 }()
 
-type ObjectState struct {
+type ObjectVersion struct {
 	Version         int
 	Spec            string
 	Head            int
 	DigestAlgorithm string
-	State           map[string]FileInfo
+	State           Manifest
 	Messsage        string
 	User            *ocfl.User
 	Created         time.Time
 }
 
-func (obj ObjectState) DigestMap() ocfl.DigestMap {
-	m := map[string][]string{}
-	for d, info := range obj.State {
-		m[d] = info.Paths
+// Manifest maps digest to FileInfo
+type Manifest map[string]FileInfo
+
+func (m Manifest) DigestMap() ocfl.DigestMap {
+	dm := map[string][]string{}
+	for d, info := range m {
+		dm[d] = info.Paths
 	}
-	return ocfl.DigestMap(m)
+	return ocfl.DigestMap(dm)
 }
 
-type ObjectManifest struct {
-	DigestAlgorithm string
-	Manifest        map[string]FileInfo
+func (m Manifest) PathMap() ocfl.PathMap {
+	pm := map[string]string{}
+	for d, info := range m {
+		for _, p := range info.Paths {
+			pm[p] = d
+		}
+	}
+	return pm
 }
-
-type DigestMap map[string]FileInfo
 
 type FileInfo struct {
 	Size   int64
 	Paths  []string
-	Fixity map[string]string
+	Fixity ocfl.DigestSet
 }
