@@ -35,7 +35,7 @@ ON CONFLICT(store_id, ocfl_id) DO UPDATE SET
     head=?4,
     spec=?5,
     alg=?6
-RETURNING id, store_id, ocfl_id, path, head, spec, alg
+RETURNING id, store_id, ocfl_id, path, head, alg, spec
 `
 
 type CreateObjectParams struct {
@@ -63,8 +63,8 @@ func (q *Queries) CreateObject(ctx context.Context, arg CreateObjectParams) (Obj
 		&i.OcflID,
 		&i.Path,
 		&i.Head,
-		&i.Spec,
 		&i.Alg,
+		&i.Spec,
 	)
 	return i, err
 }
@@ -162,7 +162,7 @@ func (q *Queries) DeleteUploads(ctx context.Context, uploaderID string) error {
 }
 
 const getObject = `-- name: GetObject :one
-SELECT id, store_id, ocfl_id, path, head, spec, alg from objects WHERE store_id = ? AND ocfl_id = ?
+SELECT id, store_id, ocfl_id, path, head, alg, spec from objects WHERE store_id = ? AND ocfl_id = ?
 `
 
 type GetObjectParams struct {
@@ -179,8 +179,8 @@ func (q *Queries) GetObject(ctx context.Context, arg GetObjectParams) (Object, e
 		&i.OcflID,
 		&i.Path,
 		&i.Head,
-		&i.Spec,
 		&i.Alg,
+		&i.Spec,
 	)
 	return i, err
 }

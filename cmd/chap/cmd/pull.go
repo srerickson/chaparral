@@ -81,7 +81,7 @@ func (pull *pullCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Conf
 	return nil
 }
 
-func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, rootID, objectID, dst string) (*client.ObjectState, error) {
+func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, rootID, objectID, dst string) (*client.ObjectVersion, error) {
 	remote, err := cli.GetObjectVersion(ctx, rootID, objectID, pull.vNum)
 	if err != nil {
 		return nil, fmt.Errorf("getting object state: %w", err)

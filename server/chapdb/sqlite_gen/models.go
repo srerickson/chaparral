@@ -23,8 +23,8 @@ type Object struct {
 	OcflID  string
 	Path    string
 	Head    int64
-	Spec    string
 	Alg     string
+	Spec    string
 }
 
 type Upload struct {

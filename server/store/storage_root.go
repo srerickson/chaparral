@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
+	"sort"
 	"sync"
 	"time"
 
@@ -29,18 +31,18 @@ type StorageRoot struct {
 	base    *ocflv1.Store // OCFL storage root
 	baseErr error         // error loading OCFL storage root
 	locker  *lock.Locker  // object mx
-	init    *StorageInitializer
+	init    *StorageRootInitializer
 	once    sync.Once // initialize base one time
 }
 
-// StorageInitializer is used to configure new storage roots that don't exist
-type StorageInitializer struct {
+// StorageRootInitializer is used to configure new storage roots that don't exist
+type StorageRootInitializer struct {
 	Description string `json:"description,omitempty"`
 	Layout      string `json:"layout,omitempty"`
 	//LayoutConfig map[string]any `json:"layout_config,omitempty"`
 }
 
-func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageInitializer) *StorageRoot {
+func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageRootInitializer) *StorageRoot {
 	return &StorageRoot{
 		id:     id,
 		fs:     fsys,
@@ -48,6 +50,39 @@ func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageInit
 		init:   init,
 		locker: lock.NewLocker(),
 	}
+}
+
+// FS returns the ocfl.WriteFS where the storage root is saved
+func (store *StorageRoot) FS() ocfl.WriteFS { return store.fs }
+
+// Path returns store's path relative to its FS
+func (store *StorageRoot) Path() string { return store.path }
+
+// ID returns the storage root's unique ID
+func (store *StorageRoot) ID() string { return store.id }
+
+// Description returns the description stored with the OCFL storage root.
+// It may be empty
+func (store *StorageRoot) Description() string {
+	if store.base != nil {
+		return store.base.Description()
+	}
+	return ""
+}
+
+// store returns the version of the OCFL specification useb by the storage root
+func (store *StorageRoot) Spec() ocfl.Spec {
+	if store.base == nil {
+		return ocfl.Spec{}
+	}
+	return store.base.Spec()
+}
+
+func (store *StorageRoot) ResolveID(id string) (string, error) {
+	if store.base == nil {
+		return "", errors.New("storage root not initialized")
+	}
+	return store.base.ResolveID(id)
 }
 
 func (store *StorageRoot) Ready(ctx context.Context) error {
@@ -79,33 +114,6 @@ func (store *StorageRoot) Ready(ctx context.Context) error {
 		store.base, store.baseErr = ocflv1.GetStore(ctx, store.fs, store.path)
 	})
 	return store.baseErr
-}
-
-func (store *StorageRoot) FS() ocfl.WriteFS { return store.fs }
-
-func (store *StorageRoot) Path() string { return store.path }
-
-func (store *StorageRoot) ID() string { return store.id }
-
-func (store *StorageRoot) Description() string {
-	if store.base != nil {
-		return store.base.Description()
-	}
-	return ""
-}
-
-func (store *StorageRoot) Spec() ocfl.Spec {
-	if store.base == nil {
-		return ocfl.Spec{}
-	}
-	return store.base.Spec()
-}
-
-func (store *StorageRoot) ResolveID(id string) (string, error) {
-	if store.base == nil {
-		return "", errors.New("storage root not initialized")
-	}
-	return store.base.ResolveID(id)
 }
 
 // ObjectVersion represent an OCFL Object with a specific version state.
@@ -154,7 +162,7 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 		unlock()
 		return nil, fmt.Errorf("version index %d not found", verIndex)
 	}
-	objState := ObjectVersion{
+	objVersion := ObjectVersion{
 		Path:    obj.ObjectRoot.Path,
 		ID:      obj.Inventory.ID,
 		Alg:     obj.Inventory.DigestAlgorithm,
@@ -168,12 +176,14 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 		close:   unlock,
 	}
 	for d, paths := range version.State {
-		objState.State[d] = chaparral.FileInfo{
+		paths = slices.Clone(paths)
+		sort.Strings(paths)
+		objVersion.State[d] = chaparral.FileInfo{
 			Paths:  paths,
 			Fixity: obj.Inventory.GetFixity(d),
 		}
 	}
-	return &objState, nil
+	return &objVersion, nil
 }
 
 type ObjectManifest struct {
@@ -185,22 +195,6 @@ type ObjectManifest struct {
 
 	close  func()
 	parent *StorageRoot
-}
-
-func (obj *ObjectManifest) OCFLManifestFixity() (ocfl.DigestMap, map[string]ocfl.DigestMap) {
-	m := ocfl.DigestMap{}
-	f := map[string]ocfl.DigestMap{}
-	for d, info := range obj.Manifest {
-		m[d] = info.Paths
-		for fixAlg, fixD := range info.Fixity {
-			if f[fixAlg] == nil {
-				f[fixAlg] = map[string][]string{}
-			}
-			f[fixAlg][fixD] = append(f[fixAlg][fixD], info.Paths...)
-		}
-
-	}
-	return m, f
 }
 
 func (obj *ObjectManifest) Close() error {
@@ -247,6 +241,8 @@ func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string
 		close:  unlock,
 	}
 	for d, paths := range obj.Inventory.Manifest {
+		paths = slices.Clone(paths)
+		sort.Strings(paths)
 		man.Manifest[d] = chaparral.FileInfo{
 			Paths:  paths,
 			Fixity: obj.Inventory.GetFixity(d),

@@ -7,16 +7,16 @@ import "google/protobuf/timestamp.proto";
 
 // AccessService provides endpoints for reading OCFL objects.
 service AccessService {    
-    // GetObjectState returns details about the logical state of an OCFL object
+    // GetObjectVersion returns details about the logical state of an OCFL object
     // version.
-    rpc GetObjectState(GetObjectStateRequest) returns (GetObjectStateResponse) {}
+    rpc GetObjectVersion(GetObjectVersionRequest) returns (GetObjectVersionResponse) {}
     // GetObjectManifest returns digests, sizes, and fixity information for all
     // content associated with an object across all its versions.
     rpc GetObjectManifest(GetObjectManifestRequest) returns (GetObjectManifestResponse) {}
 }
 
-// GetObjectStateRequest is used to request information about an object's state.
-message GetObjectStateRequest{
+// GetObjectVersionRequest is used to request information about an object's state.
+message GetObjectVersionRequest{
     // The storage root id for the object to access. If not set, the default
     // storage root is used.
     string storage_root_id = 1;
@@ -27,8 +27,8 @@ message GetObjectStateRequest{
     int32 version = 3;
 }
 
-// GetObjectStateResponse represents state for a specific object version.
-message GetObjectStateResponse {
+// GetObjectVersionResponse represents state for a specific object version.
+message GetObjectVersionResponse {
     // The object's storage root id. The empty string corresponds to the default
     // storage root.
     string storage_root_id = 1;

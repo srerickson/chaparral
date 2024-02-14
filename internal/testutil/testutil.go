@@ -28,7 +28,7 @@ import (
 
 var (
 	s3Env     = "CHAPARRAL_TEST_S3"
-	storeConf = store.StorageInitializer{
+	storeConf = store.StorageRootInitializer{
 		Description: "test store",
 		Layout:      extension.Ext0003().Name(),
 	}

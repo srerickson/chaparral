@@ -47,11 +47,11 @@ func TestAccessServiceHandler(t *testing.T) {
 	t.Run("GetObjectState()", func(t *testing.T) {
 		chap := chaparralv1connect.NewAccessServiceClient(httpClient, srv.URL)
 		ctx := context.Background()
-		req := connect.NewRequest(&chaparralv1.GetObjectStateRequest{
+		req := connect.NewRequest(&chaparralv1.GetObjectVersionRequest{
 			StorageRootId: storeID,
 			ObjectId:      objectID,
 		})
-		resp, err := chap.GetObjectState(ctx, req)
+		resp, err := chap.GetObjectVersion(ctx, req)
 		be.NilErr(t, err)
 		got := map[string]string{}
 		for d, info := range resp.Msg.State {

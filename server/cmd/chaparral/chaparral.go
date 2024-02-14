@@ -99,9 +99,9 @@ func main() {
 	var rootPaths []string
 	var roots []*store.StorageRoot
 	for _, rootConfig := range conf.Roots {
-		var init *store.StorageInitializer
+		var init *store.StorageRootInitializer
 		if rootConfig.Init != nil {
-			init = &store.StorageInitializer{
+			init = &store.StorageRootInitializer{
 				Description: rootConfig.Init.Description,
 				Layout:      rootConfig.Init.Layout,
 			}

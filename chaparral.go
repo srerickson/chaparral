@@ -63,7 +63,7 @@ func (m Manifest) PathMap() ocfl.PathMap {
 }
 
 type FileInfo struct {
-	Size   int64
-	Paths  []string
-	Fixity ocfl.DigestSet
+	Size   int64          // number of bytes
+	Paths  []string       // sorted slice of path names
+	Fixity ocfl.DigestSet // other digests associated witht the content
 }

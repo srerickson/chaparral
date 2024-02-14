@@ -227,14 +227,14 @@ func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Upload
 	return nil
 }
 
-type ObjectState struct {
+type ObjectVersion struct {
 	chaparral.ObjectVersion
 	StorageRootID string
 	ObjectID      string
 }
 
-func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
-	state := &ObjectState{
+func objectVersionFromProto(proto *chapv1.GetObjectVersionResponse) *ObjectVersion {
+	state := &ObjectVersion{
 		StorageRootID: proto.StorageRootId,
 		ObjectID:      proto.ObjectId,
 		ObjectVersion: chaparral.ObjectVersion{
@@ -262,17 +262,17 @@ func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
 	return state
 }
 
-func (cli Client) GetObjectVersion(ctx context.Context, storeID string, objectID string, ver int) (*ObjectState, error) {
-	req := &chapv1.GetObjectStateRequest{
+func (cli Client) GetObjectVersion(ctx context.Context, storeID string, objectID string, ver int) (*ObjectVersion, error) {
+	req := &chapv1.GetObjectVersionRequest{
 		StorageRootId: storeID,
 		ObjectId:      objectID,
 		Version:       int32(ver),
 	}
-	resp, err := cli.access.GetObjectState(ctx, connect.NewRequest(req))
+	resp, err := cli.access.GetObjectVersion(ctx, connect.NewRequest(req))
 	if err != nil {
 		return nil, err
 	}
-	state := objectStateFromProto(resp.Msg)
+	state := objectVersionFromProto(resp.Msg)
 	return state, nil
 }
 

@@ -43,7 +43,7 @@ func (s *AccessService) Handler() (string, http.Handler) {
 	return route, fn
 }
 
-func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request[chaparralv1.GetObjectStateRequest]) (*connect.Response[chaparralv1.GetObjectStateResponse], error) {
+func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Request[chaparralv1.GetObjectVersionRequest]) (*connect.Response[chaparralv1.GetObjectVersionResponse], error) {
 	logger := LoggerFromCtx(ctx).With(
 		QueryStorageRoot, req.Msg.StorageRootId,
 		QueryObjectID, req.Msg.ObjectId,
@@ -67,7 +67,7 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	defer obj.Close()
-	resp := &chaparralv1.GetObjectStateResponse{
+	resp := &chaparralv1.GetObjectVersionResponse{
 		StorageRootId:   req.Msg.StorageRootId,
 		ObjectId:        obj.ID,
 		DigestAlgorithm: obj.Alg,

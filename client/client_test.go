@@ -39,7 +39,7 @@ func TestClientCommit(t *testing.T) {
 		ctx := context.Background()
 		cli := chap.NewClient(htc, url)
 		fixture := filepath.Join("..", "testdata", "spec-ex-full")
-		obj1, obj2 := "object-01", "object-02"
+		obj1ID, obj2ID := "object-01", "object-02"
 
 		t.Run("commit v1", func(t *testing.T) {
 			up, err := cli.NewUploader(ctx, []string{ocfl.SHA256}, "test v1")
@@ -52,7 +52,7 @@ func TestClientCommit(t *testing.T) {
 			be.NilErr(t, cli.UploadStage(ctx, up, stage))
 			commit := &chap.Commit{
 				StorageRootID: store.ID(),
-				ObjectID:      obj1,
+				ObjectID:      obj1ID,
 				State:         stage.State,
 				Alg:           stage.Alg,
 				Version:       1,
@@ -63,20 +63,20 @@ func TestClientCommit(t *testing.T) {
 				Message: "test commit 1",
 			}
 			be.NilErr(t, cli.CommitUploader(ctx, commit, up))
-			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1, 0)
+			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
 			be.NilErr(t, err)
 			be.Equal(t, commit.StorageRootID, state.StorageRootID)
 			be.Equal(t, commit.ObjectID, state.ObjectID)
 			be.Equal(t, commit.Version, state.Head)
 			be.Equal(t, commit.Version, state.Version)
-			be.DeepEqual(t, stage.State, state.State.DigestMap().PathMap()) // FIXME
+			be.DeepEqual(t, stage.State, state.State.PathMap()) // FIXME
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
 			be.Equal(t, commit.Message, state.Messsage)
 			if state.User != nil {
 				be.DeepEqual(t, commit.User, *state.User)
 			}
 			for digest := range state.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj1, digest, "")
+				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
@@ -95,7 +95,7 @@ func TestClientCommit(t *testing.T) {
 			be.NilErr(t, cli.UploadStage(ctx, up, stage))
 			commit := &chap.Commit{
 				StorageRootID: store.ID(),
-				ObjectID:      obj1,
+				ObjectID:      obj1ID,
 				State:         stage.State,
 				Alg:           stage.Alg,
 				Version:       2,
@@ -106,7 +106,7 @@ func TestClientCommit(t *testing.T) {
 				Message: "test commit 2",
 			}
 			be.NilErr(t, cli.CommitUploader(ctx, commit, up))
-			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1, 0)
+			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
 			be.NilErr(t, err)
 			be.Equal(t, commit.StorageRootID, state.StorageRootID)
 			be.Equal(t, commit.ObjectID, state.ObjectID)
@@ -119,7 +119,7 @@ func TestClientCommit(t *testing.T) {
 				be.DeepEqual(t, commit.User, *state.User)
 			}
 			for digest := range state.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj1, digest, "")
+				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
@@ -128,40 +128,43 @@ func TestClientCommit(t *testing.T) {
 		})
 
 		t.Run("fork object", func(t *testing.T) {
-			obj1State, err := cli.GetObjectVersion(ctx, store.ID(), obj1, 0)
+			// created obj2 as fork of obj1's last version
+			// expected
+			obj1, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
 			be.NilErr(t, err)
 			commit := &chap.Commit{
 				StorageRootID: store.ID(),
-				ObjectID:      obj2,
+				ObjectID:      obj2ID,
 				Version:       1,
-				Alg:           obj1State.DigestAlgorithm,
-				State:         obj1State.State.PathMap(),
+				Alg:           obj1.DigestAlgorithm,
+				State:         obj1.State.PathMap(),
 				User: ocfl.User{
 					Name:    "C.D.",
 					Address: "ef@gh.i",
 				},
 				Message: "test fork",
 			}
-			be.NilErr(t, cli.CommitFork(ctx, commit, store.ID(), obj1))
-			state, err := cli.GetObjectVersion(ctx, store.ID(), obj2, 0)
+			be.NilErr(t, cli.CommitFork(ctx, commit, store.ID(), obj1ID))
+			// result
+			obj2, err := cli.GetObjectVersion(ctx, store.ID(), obj2ID, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.StorageRootID, state.StorageRootID)
-			be.Equal(t, commit.ObjectID, state.ObjectID)
-			be.Equal(t, commit.Version, state.Head)
-			be.Equal(t, commit.Version, state.Version)
-			be.Equal(t, commit.Alg, state.DigestAlgorithm)
-			be.Equal(t, commit.Message, state.Messsage)
-			if state.User != nil {
-				be.DeepEqual(t, commit.User, *state.User)
+			be.Equal(t, commit.StorageRootID, obj2.StorageRootID)
+			be.Equal(t, commit.ObjectID, obj2.ObjectID)
+			be.Equal(t, commit.Version, obj2.Head)
+			be.Equal(t, commit.Version, obj2.Version)
+			be.Equal(t, commit.Alg, obj2.DigestAlgorithm)
+			be.Equal(t, commit.Message, obj2.Messsage)
+			if obj2.User != nil {
+				be.DeepEqual(t, commit.User, *obj2.User)
 			}
-			for digest := range state.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj2, digest, "")
+			for digest := range obj2.State {
+				f, err := cli.GetContent(ctx, store.ID(), obj2ID, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
 				be.NilErr(t, f.Close())
 			}
-			be.DeepEqual(t, obj1State.State, state.State)
+			be.DeepEqual(t, obj1.State, obj2.State)
 		})
 	}
 	testutil.RunServiceTest(t, testFn)
