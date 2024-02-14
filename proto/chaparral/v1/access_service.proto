@@ -41,7 +41,8 @@ message GetObjectVersionResponse {
     // The object's digest algorithm (sha512 or sha256)
     string digest_algorithm = 5;
     // The object's logical state represented as a map from digests to 
-    // file info
+    // file info. Path entries in the file info represent logical
+    // filenames for the object version state.
     map<string,FileInfo> state = 6;
     // The message associated with the object version
     string messsage = 7;
@@ -74,7 +75,9 @@ message GetObjectManifestResponse{
     string object_id = 2;
     // digest algorithm used for manifest keys
     string digest_algorithm = 3;
-    // manifest is a map of digest values to Item info
+    // manifest is a map of digest values to file info. Path
+    // entries represent content paths relative to root of the
+    // OCFL object
     map<string,FileInfo> manifest = 4;
 }
 
@@ -82,7 +85,7 @@ message GetObjectManifestResponse{
 message FileInfo {
     // file size
     int64 size = 1;
-    // content file paths relative to the object root
+    // one or more file paths for the content
     repeated string paths = 2;
     // map of alternate digests alg -> digest
     map<string,string> fixity = 3;

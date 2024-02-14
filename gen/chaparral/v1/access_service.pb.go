@@ -108,7 +108,8 @@ type GetObjectVersionResponse struct {
 	// The object's digest algorithm (sha512 or sha256)
 	DigestAlgorithm string `protobuf:"bytes,5,opt,name=digest_algorithm,json=digestAlgorithm,proto3" json:"digest_algorithm,omitempty"`
 	// The object's logical state represented as a map from digests to
-	// file info
+	// file info. Path entries in the file info represent logical
+	// filenames for the object version state.
 	State map[string]*FileInfo `protobuf:"bytes,6,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// The message associated with the object version
 	Messsage string `protobuf:"bytes,7,opt,name=messsage,proto3" json:"messsage,omitempty"`
@@ -295,7 +296,9 @@ type GetObjectManifestResponse struct {
 	ObjectId string `protobuf:"bytes,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
 	// digest algorithm used for manifest keys
 	DigestAlgorithm string `protobuf:"bytes,3,opt,name=digest_algorithm,json=digestAlgorithm,proto3" json:"digest_algorithm,omitempty"`
-	// manifest is a map of digest values to Item info
+	// manifest is a map of digest values to file info. Path
+	// entries represent content paths relative to root of the
+	// OCFL object
 	Manifest map[string]*FileInfo `protobuf:"bytes,4,rep,name=manifest,proto3" json:"manifest,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
@@ -366,7 +369,7 @@ type FileInfo struct {
 
 	// file size
 	Size int64 `protobuf:"varint,1,opt,name=size,proto3" json:"size,omitempty"`
-	// content file paths relative to the object root
+	// one or more file paths for the content
 	Paths []string `protobuf:"bytes,2,rep,name=paths,proto3" json:"paths,omitempty"`
 	// map of alternate digests alg -> digest
 	Fixity map[string]string `protobuf:"bytes,3,rep,name=fixity,proto3" json:"fixity,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
