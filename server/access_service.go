@@ -50,13 +50,13 @@ func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Reque
 		"version", req.Msg.Version,
 	)
 	user := AuthUserFromCtx(ctx)
+	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
+		err := errors.New("you don't have permission to read from the storage root")
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
 	store, err := s.storageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
-	}
-	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
-		err = errors.New("you don't have permission to read from the storage root")
-		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 	obj, err := store.GetObjectVersion(ctx, req.Msg.ObjectId, int(req.Msg.Version))
 	if err != nil {
@@ -68,13 +68,13 @@ func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Reque
 	}
 	defer obj.Close()
 	resp := &chaparralv1.GetObjectVersionResponse{
-		StorageRootId:   req.Msg.StorageRootId,
-		ObjectId:        obj.ID,
-		DigestAlgorithm: obj.Alg,
+		StorageRootId:   obj.StorageRootID,
+		ObjectId:        obj.ObjectID,
+		DigestAlgorithm: obj.DigestAlgorithm,
 		Version:         int32(obj.Version),
 		Head:            int32(obj.Head),
-		Spec:            obj.Spec.String(),
-		Messsage:        obj.Message,
+		Spec:            obj.Spec,
+		Message:         obj.Message,
 		Created:         timestamppb.New(obj.Created),
 		State:           map[string]*chaparralv1.FileInfo{},
 	}
@@ -91,8 +91,45 @@ func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Reque
 	return connect.NewResponse(resp), nil
 }
 
-func (srv *AccessService) GetObjectManifest(ctx context.Context, req *connect.Request[chaparralv1.GetObjectManifestRequest]) (*connect.Response[chaparralv1.GetObjectManifestResponse], error) {
-	return nil, errors.New("not implemented")
+func (s *AccessService) GetObjectManifest(ctx context.Context, req *connect.Request[chaparralv1.GetObjectManifestRequest]) (*connect.Response[chaparralv1.GetObjectManifestResponse], error) {
+	logger := LoggerFromCtx(ctx).With(
+		QueryStorageRoot, req.Msg.StorageRootId,
+		QueryObjectID, req.Msg.ObjectId,
+	)
+	user := AuthUserFromCtx(ctx)
+	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
+		err := errors.New("you don't have permission to read from the storage root")
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	store, err := s.storageRoot(req.Msg.StorageRootId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+	obj, err := store.GetObjectManifest(ctx, req.Msg.ObjectId)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, connect.NewError(connect.CodeNotFound, err)
+		}
+		logger.Error(err.Error())
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	defer obj.Close()
+	resp := &chaparralv1.GetObjectManifestResponse{
+		StorageRootId:   obj.StorageRootID,
+		ObjectId:        obj.ObjectID,
+		Path:            obj.Path,
+		DigestAlgorithm: obj.DigestAlgorithm,
+		Spec:            obj.Spec,
+		Manifest:        map[string]*chaparralv1.FileInfo{},
+	}
+	for d, info := range obj.Manifest {
+		resp.Manifest[d] = &chaparralv1.FileInfo{
+			Paths:  info.Paths,
+			Size:   info.Size,
+			Fixity: info.Fixity,
+		}
+	}
+	return connect.NewResponse(resp), nil
 }
 
 func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request) {

@@ -45,7 +45,7 @@ message GetObjectVersionResponse {
     // filenames for the object version state.
     map<string,FileInfo> state = 6;
     // The message associated with the object version
-    string messsage = 7;
+    string message = 7;
     // The user information associated with the object version
     User user = 8;
     // The timestamp associated witht he object version
@@ -73,12 +73,17 @@ message GetObjectManifestResponse{
     string storage_root_id = 1;
     // The object id for the manifest
     string object_id = 2;
+    // The object's path relative to the OCFL Storage Root
+    // that contains it
+    string path = 3;
     // digest algorithm used for manifest keys
-    string digest_algorithm = 3;
+    string digest_algorithm = 4;
     // manifest is a map of digest values to file info. Path
     // entries represent content paths relative to root of the
     // OCFL object
-    map<string,FileInfo> manifest = 4;
+    map<string,FileInfo> manifest = 5;
+    // The OCFL specification version for the object
+    string spec = 6;
 }
 
 

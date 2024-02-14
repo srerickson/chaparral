@@ -71,7 +71,7 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.Version, state.Version)
 			be.DeepEqual(t, stage.State, state.State.PathMap()) // FIXME
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
-			be.Equal(t, commit.Message, state.Messsage)
+			be.Equal(t, commit.Message, state.Message)
 			if state.User != nil {
 				be.DeepEqual(t, commit.User, *state.User)
 			}
@@ -114,7 +114,7 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.Version, state.Version)
 			be.DeepEqual(t, stage.State, state.State.PathMap())
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
-			be.Equal(t, commit.Message, state.Messsage)
+			be.Equal(t, commit.Message, state.Message)
 			if state.User != nil {
 				be.DeepEqual(t, commit.User, *state.User)
 			}
@@ -153,7 +153,7 @@ func TestClientCommit(t *testing.T) {
 			be.Equal(t, commit.Version, obj2.Head)
 			be.Equal(t, commit.Version, obj2.Version)
 			be.Equal(t, commit.Alg, obj2.DigestAlgorithm)
-			be.Equal(t, commit.Message, obj2.Messsage)
+			be.Equal(t, commit.Message, obj2.Message)
 			if obj2.User != nil {
 				be.DeepEqual(t, commit.User, *obj2.User)
 			}

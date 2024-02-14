@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"github.com/srerickson/chaparral"
 	client "github.com/srerickson/chaparral/client"
 	cfg "github.com/srerickson/chaparral/cmd/chap/config"
 	"github.com/srerickson/chaparral/cmd/chap/ui"
@@ -81,7 +82,7 @@ func (pull *pullCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Conf
 	return nil
 }
 
-func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, rootID, objectID, dst string) (*client.ObjectVersion, error) {
+func (pull *pullCmd) pullState(ctx context.Context, cli *client.Client, rootID, objectID, dst string) (*chaparral.ObjectVersion, error) {
 	remote, err := cli.GetObjectVersion(ctx, rootID, objectID, pull.vNum)
 	if err != nil {
 		return nil, fmt.Errorf("getting object state: %w", err)

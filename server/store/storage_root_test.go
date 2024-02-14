@@ -54,7 +54,7 @@ func testStorageRoot(t *testing.T, root *store.StorageRoot) {
 
 	// commit stage that is a fork of srcObj
 	stage := &ocfl.Stage{
-		DigestAlgorithm: srcVersion.Alg,
+		DigestAlgorithm: srcVersion.DigestAlgorithm,
 	}
 	stage.State = srcVersion.State.DigestMap()
 	stage.ContentSource = srcManifest
@@ -66,7 +66,7 @@ func testStorageRoot(t *testing.T, root *store.StorageRoot) {
 			ocflv1.WithCreated(srcVersion.Created),
 			ocflv1.WithMessage(srcVersion.Message),
 			ocflv1.WithUser(*srcVersion.User),
-			ocflv1.WithOCFLSpec(srcVersion.Spec),
+			// ocflv1.WithOCFLSpec(srcVersion.Spec),
 		)
 	})
 	// should have succeeded only once
@@ -87,7 +87,7 @@ func testStorageRoot(t *testing.T, root *store.StorageRoot) {
 	// close newObj and check Delete()
 	newVer.Close()
 	errs = goGroupErrors(2, func() error {
-		return root.DeleteObject(ctx, newVer.ID)
+		return root.DeleteObject(ctx, newVer.ObjectID)
 	})
 	// DeleteObject() should have succeeded only once
 	be.True(t, slices.Contains(errs, nil))
@@ -95,7 +95,7 @@ func testStorageRoot(t *testing.T, root *store.StorageRoot) {
 		return err != nil
 	}))
 	// object is gone
-	_, err = root.GetObjectVersion(ctx, srcVersion.ID, 0)
+	_, err = root.GetObjectVersion(ctx, srcVersion.ObjectID, 0)
 	be.True(t, errors.Is(err, fs.ErrNotExist))
 }
 

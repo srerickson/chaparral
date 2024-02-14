@@ -8,7 +8,6 @@ import (
 	"slices"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/srerickson/chaparral"
 	"github.com/srerickson/chaparral/server/internal/lock"
@@ -118,17 +117,8 @@ func (store *StorageRoot) Ready(ctx context.Context) error {
 
 // ObjectVersion represent an OCFL Object with a specific version state.
 type ObjectVersion struct {
-	Path    string
-	ID      string
-	Version int
-	Head    int
-	Spec    ocfl.Spec
-	Alg     string
-	State   chaparral.Manifest
-	Message string
-	User    *ocfl.User
-	Created time.Time
-	close   func()
+	chaparral.ObjectVersion
+	close func()
 }
 
 func (objState *ObjectVersion) Close() error {
@@ -163,17 +153,18 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 		return nil, fmt.Errorf("version index %d not found", verIndex)
 	}
 	objVersion := ObjectVersion{
-		Path:    obj.ObjectRoot.Path,
-		ID:      obj.Inventory.ID,
-		Alg:     obj.Inventory.DigestAlgorithm,
-		Spec:    obj.Inventory.Type.Spec,
-		Head:    obj.Inventory.Head.Num(),
-		Version: verIndex,
-		State:   map[string]chaparral.FileInfo{},
-		Message: version.Message,
-		User:    version.User,
-		Created: version.Created,
-		close:   unlock,
+		ObjectVersion: chaparral.ObjectVersion{
+			ObjectID:        obj.Inventory.ID,
+			DigestAlgorithm: obj.Inventory.DigestAlgorithm,
+			Spec:            obj.Inventory.Type.Spec.String(),
+			Head:            obj.Inventory.Head.Num(),
+			Version:         verIndex,
+			State:           map[string]chaparral.FileInfo{},
+			Message:         version.Message,
+			User:            version.User,
+			Created:         version.Created,
+		},
+		close: unlock,
 	}
 	for d, paths := range version.State {
 		paths = slices.Clone(paths)
@@ -187,12 +178,7 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 }
 
 type ObjectManifest struct {
-	Path     string
-	ID       string
-	StoreID  string
-	Alg      string
-	Manifest chaparral.Manifest
-
+	chaparral.ObjectManifest
 	close  func()
 	parent *StorageRoot
 }
@@ -232,14 +218,15 @@ func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string
 		return nil, err
 	}
 	man := ObjectManifest{
-		Path:     obj.ObjectRoot.Path,
-		ID:       obj.Inventory.ID,
-		Alg:      obj.Inventory.DigestAlgorithm,
-		Manifest: chaparral.Manifest{},
-
 		parent: store,
 		close:  unlock,
 	}
+	man.Path = obj.ObjectRoot.Path
+	man.StorageRootID = store.id
+	man.ObjectID = obj.Inventory.ID
+	man.DigestAlgorithm = obj.Inventory.DigestAlgorithm
+	man.Manifest = chaparral.Manifest{}
+	man.Spec = obj.Inventory.Type.String()
 	for d, paths := range obj.Inventory.Manifest {
 		paths = slices.Clone(paths)
 		sort.Strings(paths)

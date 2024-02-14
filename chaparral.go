@@ -30,13 +30,26 @@ var CODE_VERSION = func() string {
 	return "none"
 }()
 
-type ObjectVersion struct {
-	Version         int
+// ObjectManifest corresponds to GetObjectManifestResponse proto
+type ObjectManifest struct {
+	ObjectID        string
+	StorageRootID   string
+	Path            string
 	Spec            string
+	DigestAlgorithm string
+	Manifest        Manifest
+}
+
+// ObjectVersion corresponds to GetObjectVersionResponse proto
+type ObjectVersion struct {
+	ObjectID        string
+	StorageRootID   string
+	Spec            string
+	Version         int
 	Head            int
 	DigestAlgorithm string
 	State           Manifest
-	Messsage        string
+	Message         string
 	User            *ocfl.User
 	Created         time.Time
 }

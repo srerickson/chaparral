@@ -20,7 +20,7 @@ import (
 )
 
 // regexp for `.chaparral` directory
-var chaparralRE = regexp.MustCompile(`^(.*/)?\.` + chaparral + `$`)
+var chaparralRE = regexp.MustCompile(`^(.*/)?\.` + chaparralDir + `$`)
 
 var push = &pushCmd{
 	Command: &cobra.Command{
@@ -199,7 +199,7 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, commit *c
 			return
 		}
 		fmt.Println("uploader", uploader.ID, "was not cleaned-up")
-		fmt.Println("use", chaparral, "uploader --delete", uploader.ID, "to clear it manually.")
+		fmt.Println("use", chaparralDir, "uploader --delete", uploader.ID, "to clear it manually.")
 	}()
 
 	// Run UIs: upload and commit

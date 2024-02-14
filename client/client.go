@@ -227,24 +227,16 @@ func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Upload
 	return nil
 }
 
-type ObjectVersion struct {
-	chaparral.ObjectVersion
-	StorageRootID string
-	ObjectID      string
-}
-
-func objectVersionFromProto(proto *chapv1.GetObjectVersionResponse) *ObjectVersion {
-	state := &ObjectVersion{
-		StorageRootID: proto.StorageRootId,
-		ObjectID:      proto.ObjectId,
-		ObjectVersion: chaparral.ObjectVersion{
-			Spec:            proto.Spec,
-			Version:         int(proto.Version),
-			DigestAlgorithm: proto.DigestAlgorithm,
-			Head:            int(proto.Head),
-			Messsage:        proto.Messsage,
-			State:           chaparral.Manifest{},
-		},
+func objectVersionFromProto(proto *chapv1.GetObjectVersionResponse) *chaparral.ObjectVersion {
+	state := &chaparral.ObjectVersion{
+		StorageRootID:   proto.StorageRootId,
+		ObjectID:        proto.ObjectId,
+		Spec:            proto.Spec,
+		Version:         int(proto.Version),
+		DigestAlgorithm: proto.DigestAlgorithm,
+		Head:            int(proto.Head),
+		Message:         proto.Message,
+		State:           chaparral.Manifest{},
 	}
 	for digest, info := range proto.State {
 		state.State[digest] = chaparral.FileInfo{
@@ -262,7 +254,7 @@ func objectVersionFromProto(proto *chapv1.GetObjectVersionResponse) *ObjectVersi
 	return state
 }
 
-func (cli Client) GetObjectVersion(ctx context.Context, storeID string, objectID string, ver int) (*ObjectVersion, error) {
+func (cli Client) GetObjectVersion(ctx context.Context, storeID string, objectID string, ver int) (*chaparral.ObjectVersion, error) {
 	req := &chapv1.GetObjectVersionRequest{
 		StorageRootId: storeID,
 		ObjectId:      objectID,

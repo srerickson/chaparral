@@ -9,22 +9,21 @@ import (
 	"time"
 )
 
-type Content struct {
-	ObjectID int64
-	Digest   []byte
-	Path     string
-	Fixity   []byte
-	Size     sql.NullInt64
-}
-
 type Object struct {
 	ID      int64
 	StoreID string
 	OcflID  string
 	Path    string
-	Head    int64
 	Alg     string
 	Spec    string
+}
+
+type ObjectContent struct {
+	ObjectID int64
+	Digest   string
+	Paths    interface{}
+	Fixity   interface{}
+	Size     sql.NullInt64
 }
 
 type Upload struct {
@@ -45,7 +44,7 @@ type Uploader struct {
 type Version struct {
 	ObjectID    int64
 	Num         int64
-	State       []byte
+	State       interface{}
 	Message     string
 	UserName    sql.NullString
 	UserAddress sql.NullString

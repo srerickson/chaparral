@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/srerickson/chaparral"
 	sqlite "github.com/srerickson/chaparral/server/chapdb/sqlite_gen"
 	"github.com/srerickson/chaparral/server/uploader"
 	"github.com/srerickson/ocfl-go"
@@ -156,17 +157,28 @@ func (db *SQLiteDB) CountUploaders(ctx context.Context) (int, error) {
 	return int(n), nil
 }
 
-func (db *SQLiteDB) SetObject(ctx context.Context, storeID, objID, path string, head int, spec, alg string) error {
+func (db *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.ObjectManifest) error {
 	qry := sqlite.New(db.sqlDB())
-	_, err := qry.CreateObject(ctx, sqlite.CreateObjectParams{
-		StoreID: storeID,
-		OcflID:  objID,
-		Path:    path,
-		Head:    int64(head),
-		Spec:    spec,
-		Alg:     alg,
+	dbObj, err := qry.CreateObject(ctx, sqlite.CreateObjectParams{
+		StoreID: obj.StorageRootID,
+		OcflID:  obj.ObjectID,
+		Path:    obj.Path,
+		Spec:    obj.Spec,
+		Alg:     obj.DigestAlgorithm,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	for digest, info := obj.Manifest {
+		_, err = qry.CreateObjectContent(ctx, sqlite.CreateObjectContentParams{
+			ObjectID: dbObj.ID,
+			Digest: digest,
+
+		})
+	}
+
+	
+	return nil
 }
 
 func (db *SQLiteDB) GetObject(ctx context.Context, storeID, objID string) (string, error) {

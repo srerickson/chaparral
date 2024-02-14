@@ -146,7 +146,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("in source content: %w", err))
 		}
 		defer srcObj.Close()
-		if srcAlg := srcObj.Alg; srcAlg != commitAlg {
+		if srcAlg := srcObj.DigestAlgorithm; srcAlg != commitAlg {
 			err = fmt.Errorf("commit declares %s, but source object was created with %s", commitAlg, srcAlg)
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
