@@ -32,6 +32,9 @@ type StorageRoot struct {
 	locker  *lock.Locker  // object mx
 	init    *StorageRootInitializer
 	once    sync.Once // initialize base one time
+
+	gettingObjects   map[string]chan getObjectResult
+	gettingObjectsMx sync.Mutex
 }
 
 // StorageRootInitializer is used to configure new storage roots that don't exist
@@ -43,11 +46,12 @@ type StorageRootInitializer struct {
 
 func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageRootInitializer) *StorageRoot {
 	return &StorageRoot{
-		id:     id,
-		fs:     fsys,
-		path:   path,
-		init:   init,
-		locker: lock.NewLocker(),
+		id:             id,
+		fs:             fsys,
+		path:           path,
+		init:           init,
+		locker:         lock.NewLocker(),
+		gettingObjects: map[string]chan getObjectResult{},
 	}
 }
 
@@ -139,7 +143,7 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 	if err != nil {
 		return nil, err
 	}
-	obj, err := store.base.GetObject(ctx, objectID)
+	obj, err := store.getObject(ctx, objectID)
 	if err != nil {
 		unlock()
 		return nil, err
@@ -155,6 +159,7 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 	objVersion := ObjectVersion{
 		ObjectVersion: chaparral.ObjectVersion{
 			ObjectID:        obj.Inventory.ID,
+			StorageRootID:   store.id,
 			DigestAlgorithm: obj.Inventory.DigestAlgorithm,
 			Spec:            obj.Inventory.Type.Spec.String(),
 			Head:            obj.Inventory.Head.Num(),
@@ -205,6 +210,11 @@ func (obj *ObjectManifest) GetContent(digest string) (ocfl.FS, string) {
 }
 
 func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string) (*ObjectManifest, error) {
+	// check database for existing record
+	// if there's no record, see if it's already been requested.
+	// wait for the record or start a new request
+	//
+
 	if err := store.Ready(ctx); err != nil {
 		return nil, err
 	}
@@ -212,7 +222,7 @@ func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string
 	if err != nil {
 		return nil, err
 	}
-	obj, err := store.base.GetObject(ctx, objectID)
+	obj, err := store.getObject(ctx, objectID)
 	if err != nil {
 		unlock()
 		return nil, err
@@ -220,13 +230,15 @@ func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string
 	man := ObjectManifest{
 		parent: store,
 		close:  unlock,
+		ObjectManifest: chaparral.ObjectManifest{
+			StorageRootID:   store.id,
+			ObjectID:        obj.Inventory.ID,
+			Path:            obj.ObjectRoot.Path,
+			DigestAlgorithm: obj.Inventory.DigestAlgorithm,
+			Manifest:        chaparral.Manifest{},
+			Spec:            obj.Inventory.Type.String(),
+		},
 	}
-	man.Path = obj.ObjectRoot.Path
-	man.StorageRootID = store.id
-	man.ObjectID = obj.Inventory.ID
-	man.DigestAlgorithm = obj.Inventory.DigestAlgorithm
-	man.Manifest = chaparral.Manifest{}
-	man.Spec = obj.Inventory.Type.String()
 	for d, paths := range obj.Inventory.Manifest {
 		paths = slices.Clone(paths)
 		sort.Strings(paths)
@@ -236,6 +248,42 @@ func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string
 		}
 	}
 	return &man, nil
+}
+
+func (store *StorageRoot) getObject(ctx context.Context, objectID string) (*ocflv1.Object, error) {
+	ch, first := store.newGetObjectChan(objectID)
+	if !first {
+		r := <-ch // wait for result from first
+		return r.obj, r.err
+	}
+	// we are first.
+	// there isn't an existing request.
+	// do the request, send it to any
+	// others and clean up
+	var r getObjectResult
+	r.obj, r.err = store.base.GetObject(ctx, objectID)
+	ch <- r
+	close(ch)
+	store.gettingObjectsMx.Lock()
+	defer store.gettingObjectsMx.Unlock()
+	delete(store.gettingObjects, objectID)
+	return r.obj, r.err
+}
+
+type getObjectResult struct {
+	obj *ocflv1.Object
+	err error
+}
+
+func (store *StorageRoot) newGetObjectChan(objectID string) (chan getObjectResult, bool) {
+	store.gettingObjectsMx.Lock()
+	defer store.gettingObjectsMx.Unlock()
+	if val, ok := store.gettingObjects[objectID]; ok {
+		return val, false
+	}
+	ch := make(chan getObjectResult, 1)
+	store.gettingObjects[objectID] = ch
+	return ch, true
 }
 
 func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *ocfl.Stage, opts ...ocflv1.CommitOption) error {

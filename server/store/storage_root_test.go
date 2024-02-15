@@ -18,15 +18,35 @@ import (
 )
 
 func TestStorageRoot(t *testing.T) {
-	testStorageRoot(t, testutil.NewStoreTempDir(t))
+	roots := []*store.StorageRoot{
+		testutil.NewStoreTempDir(t),
+	}
 	if testutil.WithS3() {
-		testStorageRoot(t, testutil.NewStoreS3(t))
+		roots = append(roots, testutil.NewStoreS3(t))
+	}
+	for _, r := range roots {
+		testObjectLifecycle(t, r)
 	}
 }
 
-func testStorageRoot(t *testing.T, root *store.StorageRoot) {
+func TestConcurrentGet(t *testing.T) {
 	ctx := context.Background()
-	be.NilErr(t, root.Ready(ctx))
+	srcID := "ark:123/abc"
+	root := testutil.NewStoreTestdata(t, filepath.Join("..", "..", "testdata"))
+	times := 100
+	wg := sync.WaitGroup{}
+	for i := 0; i < times; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			root.GetObjectManifest(ctx, srcID)
+		}()
+	}
+	wg.Wait()
+}
+
+func testObjectLifecycle(t *testing.T, root *store.StorageRoot) {
+	ctx := context.Background()
 
 	// create the storage root
 	be.NilErr(t, root.Ready(ctx))
@@ -55,10 +75,10 @@ func testStorageRoot(t *testing.T, root *store.StorageRoot) {
 	// commit stage that is a fork of srcObj
 	stage := &ocfl.Stage{
 		DigestAlgorithm: srcVersion.DigestAlgorithm,
+		State:           srcVersion.State.DigestMap(),
+		ContentSource:   srcManifest,
+		FixitySource:    srcManifest,
 	}
-	stage.State = srcVersion.State.DigestMap()
-	stage.ContentSource = srcManifest
-	stage.FixitySource = srcManifest
 
 	// test concurrent go-routines
 	errs := goGroupErrors(2, func() error {
