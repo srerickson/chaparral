@@ -7,7 +7,6 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"time"
 )
 
@@ -83,9 +82,9 @@ RETURNING object_id, digest, paths, fixity, size
 type CreateObjectContentParams struct {
 	ObjectID int64
 	Digest   string
-	Paths    interface{}
-	Fixity   interface{}
-	Size     sql.NullInt64
+	Paths    []byte
+	Fixity   []byte
+	Size     int64
 }
 
 func (q *Queries) CreateObjectContent(ctx context.Context, arg CreateObjectContentParams) (ObjectContent, error) {
@@ -242,6 +241,39 @@ func (q *Queries) GetObjectContent(ctx context.Context, arg GetObjectContentPara
 		&i.Size,
 	)
 	return i, err
+}
+
+const getObjectContents = `-- name: GetObjectContents :many
+SELECT object_id, digest, paths, fixity, size FROM object_contents WHERE object_id = ?
+`
+
+func (q *Queries) GetObjectContents(ctx context.Context, objectID int64) ([]ObjectContent, error) {
+	rows, err := q.db.QueryContext(ctx, getObjectContents, objectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ObjectContent
+	for rows.Next() {
+		var i ObjectContent
+		if err := rows.Scan(
+			&i.ObjectID,
+			&i.Digest,
+			&i.Paths,
+			&i.Fixity,
+			&i.Size,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUploader = `-- name: GetUploader :one

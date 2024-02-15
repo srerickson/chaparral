@@ -16,13 +16,11 @@ import (
 	"github.com/srerickson/ocfl-go"
 )
 
-var (
-	sqliteOpts = url.Values{
-		"_journal": {"WAL"},
-		"_sync":    {"NORMAL"},
-		"_timeout": {"5000"},
-	}
-)
+var sqliteOpts = url.Values{
+	"_journal": {"WAL"},
+	"_sync":    {"NORMAL"},
+	"_timeout": {"5000"},
+}
 
 type SQLiteDB sql.DB
 
@@ -158,7 +156,12 @@ func (db *SQLiteDB) CountUploaders(ctx context.Context) (int, error) {
 }
 
 func (db *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.ObjectManifest) error {
-	qry := sqlite.New(db.sqlDB())
+	tx, err := db.sqlDB().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qry := sqlite.New(db.sqlDB()).WithTx(tx)
 	dbObj, err := qry.CreateObject(ctx, sqlite.CreateObjectParams{
 		StoreID: obj.StorageRootID,
 		OcflID:  obj.ObjectID,
@@ -169,26 +172,60 @@ func (db *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.Object
 	if err != nil {
 		return err
 	}
-	for digest, info := obj.Manifest {
+	for digest, info := range obj.Manifest {
+		fixBytes, err := json.Marshal(info.Fixity)
+		if err != nil {
+			return err
+		}
+		pathBytes, err := json.Marshal(info.Paths)
+		if err != nil {
+			return err
+		}
 		_, err = qry.CreateObjectContent(ctx, sqlite.CreateObjectContentParams{
 			ObjectID: dbObj.ID,
-			Digest: digest,
-
+			Digest:   digest,
+			Paths:    pathBytes,
+			Fixity:   fixBytes,
+			Size:     info.Size,
 		})
+		if err != nil {
+			return err
+		}
 	}
-
-	
-	return nil
+	return tx.Commit()
 }
 
-func (db *SQLiteDB) GetObject(ctx context.Context, storeID, objID string) (string, error) {
+func (db *SQLiteDB) GetObjectManifest(ctx context.Context, storeID, objID string) (*chaparral.ObjectManifest, error) {
 	qry := sqlite.New(db.sqlDB())
-	obj, err := qry.GetObject(ctx, sqlite.GetObjectParams{
+	objDB, err := qry.GetObject(ctx, sqlite.GetObjectParams{
 		StoreID: storeID,
 		OcflID:  objID,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return obj.Path, nil
+	obj := &chaparral.ObjectManifest{
+		ObjectID:        objDB.OcflID,
+		StorageRootID:   objDB.StoreID,
+		Path:            objDB.Path,
+		DigestAlgorithm: objDB.Alg,
+		Spec:            objDB.Spec,
+		Manifest:        chaparral.Manifest{},
+	}
+	conts, err := qry.GetObjectContents(ctx, objDB.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range conts {
+		info := chaparral.FileInfo{Size: c.Size}
+		if err := json.Unmarshal(c.Paths, &info.Paths); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(c.Fixity, &info.Fixity); err != nil {
+			return nil, err
+		}
+		obj.Manifest[c.Digest] = info
+	}
+
+	return obj, nil
 }

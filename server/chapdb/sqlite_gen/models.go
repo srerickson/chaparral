@@ -21,9 +21,9 @@ type Object struct {
 type ObjectContent struct {
 	ObjectID int64
 	Digest   string
-	Paths    interface{}
-	Fixity   interface{}
-	Size     sql.NullInt64
+	Paths    []byte
+	Fixity   []byte
+	Size     int64
 }
 
 type Upload struct {
@@ -44,7 +44,7 @@ type Uploader struct {
 type Version struct {
 	ObjectID    int64
 	Num         int64
-	State       interface{}
+	State       []byte
 	Message     string
 	UserName    sql.NullString
 	UserAddress sql.NullString

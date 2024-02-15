@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/carlmjohnson/be"
+	"github.com/srerickson/chaparral"
 	"github.com/srerickson/chaparral/server/chapdb"
 	"github.com/srerickson/chaparral/server/uploader"
+	"github.com/srerickson/ocfl-go"
 )
 
 func TestUploader(t *testing.T) {
@@ -54,9 +56,28 @@ func TestObject(t *testing.T) {
 	be.NilErr(t, err)
 	defer db.Close()
 	chapDB := (*chapdb.SQLiteDB)(db)
-	be.NilErr(t, chapDB.SetObject(ctx, "store", "obj", "./path", 1, "ocfl_v0.1", "sha512"))
-	be.NilErr(t, chapDB.SetObject(ctx, "store", "obj", "./path2", 2, "ocfl_v1.1", "sha256"))
-	p, err := chapDB.GetObject(ctx, "store", "obj")
+	in := &chaparral.ObjectManifest{
+		StorageRootID:   "store-id",
+		ObjectID:        "object-id",
+		DigestAlgorithm: "sha512",
+		Spec:            "1.0",
+		Path:            "a/place",
+		Manifest: chaparral.Manifest{
+			"abc1": chaparral.FileInfo{
+				Paths: []string{"a", "b", "c"},
+				Size:  13,
+			},
+			"abc2": chaparral.FileInfo{
+				Paths:  []string{"dir/a"},
+				Size:   1,
+				Fixity: ocfl.DigestSet{"md5": "abc123"},
+			},
+		},
+	}
+	be.NilErr(t, chapDB.SetObjectManifest(ctx, in))
+	in.Spec = "1.1"
+	be.NilErr(t, chapDB.SetObjectManifest(ctx, in))
+	out, err := chapDB.GetObjectManifest(ctx, in.StorageRootID, in.ObjectID)
 	be.NilErr(t, err)
-	be.Equal(t, "./path2", p)
+	be.DeepEqual(t, in, out)
 }

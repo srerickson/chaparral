@@ -60,6 +60,9 @@ RETURNING *;
 -- name: GetObjectContent :one
 SELECT * FROM object_contents WHERE object_id = ? AND digest = ?;
 
+-- name: GetObjectContents :many
+SELECT * FROM object_contents WHERE object_id = ?;
+
 -- name: CreateObjectContent :one 
 INSERT INTO object_contents (
     object_id,

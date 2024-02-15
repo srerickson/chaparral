@@ -14,7 +14,7 @@ CREATE TABLE objects (
 CREATE TABLE versions (
     object_id INTEGER NOT NULL, -- objects table FK
     num INTEGER NOT NULL, -- version num (1,2,3,...)
-    state JSON NOT NULL, -- json object: {digest: [path1, path2]}
+    state BLOB NOT NULL, -- json object: {digest: [path1, path2]}
     message TEXT NOT NULL, -- message saved with object version
     user_name TEXT, -- user name saved with object version
     user_address TEXT, -- user address saved with object version
@@ -26,9 +26,9 @@ CREATE TABLE versions (
 CREATE TABLE object_contents (
     object_id INTEGER NOT NULL, -- objects table FK
     digest TEXT NOT NULL, -- digest bytes for the object_contents
-    paths JSON NOT NULL, -- array of paths
-    fixity JSON, -- json object with alternate digests {alg: digest}
-    size INTEGER, -- may not be available
+    paths BLOB NOT NULL, -- array of paths
+    fixity BLOB NOT NULL, -- json object with alternate digests {alg: digest}
+    size INTEGER NOT NULL, -- may not be available
     
     PRIMARY KEY(object_id, digest)
 );
