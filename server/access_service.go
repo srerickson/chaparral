@@ -11,18 +11,11 @@ import (
 	"strings"
 
 	"github.com/bufbuild/connect-go"
+	chap "github.com/srerickson/chaparral"
 	chaparralv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	"github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
 	"github.com/srerickson/chaparral/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
-)
-
-const (
-	AccessServiceName = chaparralv1connect.AccessServiceName
-	RouteDownload     = "/" + AccessServiceName + "/" + "download"
-	QueryDigest       = "digest"
-	QueryContentPath  = "content_path"
-	QueryObjectID     = "object_id"
 )
 
 type AccessService struct {
@@ -34,7 +27,7 @@ func (s *AccessService) Handler() (string, http.Handler) {
 	// are handled in the hander functions.
 	route, handle := chaparralv1connect.NewAccessServiceHandler(s)
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == RouteDownload && r.Method == http.MethodGet {
+		if r.URL.Path == chap.RouteDownload && r.Method == http.MethodGet {
 			s.DownloadHandler(w, r)
 			return
 		}
@@ -45,8 +38,8 @@ func (s *AccessService) Handler() (string, http.Handler) {
 
 func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Request[chaparralv1.GetObjectVersionRequest]) (*connect.Response[chaparralv1.GetObjectVersionResponse], error) {
 	logger := LoggerFromCtx(ctx).With(
-		QueryStorageRoot, req.Msg.StorageRootId,
-		QueryObjectID, req.Msg.ObjectId,
+		chap.QueryStorageRoot, req.Msg.StorageRootId,
+		chap.QueryObjectID, req.Msg.ObjectId,
 		"version", req.Msg.Version,
 	)
 	user := AuthUserFromCtx(ctx)
@@ -93,8 +86,8 @@ func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Reque
 
 func (s *AccessService) GetObjectManifest(ctx context.Context, req *connect.Request[chaparralv1.GetObjectManifestRequest]) (*connect.Response[chaparralv1.GetObjectManifestResponse], error) {
 	logger := LoggerFromCtx(ctx).With(
-		QueryStorageRoot, req.Msg.StorageRootId,
-		QueryObjectID, req.Msg.ObjectId,
+		chap.QueryStorageRoot, req.Msg.StorageRootId,
+		chap.QueryObjectID, req.Msg.ObjectId,
 	)
 	user := AuthUserFromCtx(ctx)
 	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
@@ -137,15 +130,15 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		err         error
 		objectRoot  string
 		ctx         = r.Context()
-		storeID     = r.URL.Query().Get(QueryStorageRoot)
-		objectID    = r.URL.Query().Get(QueryObjectID)
-		digest      = r.URL.Query().Get(QueryDigest)
-		contentPath = r.URL.Query().Get(QueryContentPath)
+		storeID     = r.URL.Query().Get(chap.QueryStorageRoot)
+		objectID    = r.URL.Query().Get(chap.QueryObjectID)
+		digest      = r.URL.Query().Get(chap.QueryDigest)
+		contentPath = r.URL.Query().Get(chap.QueryContentPath)
 		user        = AuthUserFromCtx(ctx)
 		logger      = LoggerFromCtx(ctx).With(
-			QueryStorageRoot, storeID,
-			QueryObjectID, objectID,
-			QueryDigest, digest,
+			chap.QueryStorageRoot, storeID,
+			chap.QueryObjectID, objectID,
+			chap.QueryDigest, digest,
 		)
 	)
 	defer func() {

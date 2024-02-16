@@ -17,7 +17,6 @@ import (
 	"github.com/srerickson/chaparral"
 	chapv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	chapv1connect "github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
-	"github.com/srerickson/chaparral/server"
 	"github.com/srerickson/ocfl-go"
 )
 
@@ -37,25 +36,7 @@ func NewClient(c *http.Client, baseurl string) *Client {
 	}
 }
 
-// User represents the user account associated with the client
-//type User server.AuthUser
-
-type Uploader struct {
-	ID               string    `json:"id"`
-	UploadPath       string    `json:"upload_path"`
-	DigestAlgorithms []string  `json:"digest_algorithms"`
-	Description      string    `json:"description"`
-	Created          time.Time `json:"created"`
-	UserID           string    `json:"user_id"`
-	Uploads          []Upload  `json:"uploads,omitempty"`
-}
-
-type Upload struct {
-	Size    int64          `json:"size"`
-	Digests ocfl.DigestSet `json:"digests"`
-}
-
-func (cli Client) NewUploader(ctx context.Context, algs []string, desc string) (up *Uploader, err error) {
+func (cli Client) NewUploader(ctx context.Context, algs []string, desc string) (up *chaparral.Uploader, err error) {
 	req := connect.NewRequest(&chapv1.NewUploaderRequest{
 		DigestAlgorithms: algs,
 		Description:      desc,
@@ -64,7 +45,7 @@ func (cli Client) NewUploader(ctx context.Context, algs []string, desc string) (
 	if err != nil {
 		return
 	}
-	up = &Uploader{
+	up = &chaparral.Uploader{
 		ID:               resp.Msg.UploaderId,
 		UploadPath:       resp.Msg.UploadPath,
 		Description:      resp.Msg.Description,
@@ -74,19 +55,19 @@ func (cli Client) NewUploader(ctx context.Context, algs []string, desc string) (
 	return up, nil
 }
 
-func (cli Client) GetUploader(ctx context.Context, id string) (up *Uploader, err error) {
+func (cli Client) GetUploader(ctx context.Context, id string) (up *chaparral.Uploader, err error) {
 	req := &chapv1.GetUploaderRequest{UploaderId: id}
 	resp, err := cli.commit.GetUploader(ctx, connect.NewRequest(req))
 	if err != nil {
 		return up, err
 	}
-	up = &Uploader{
+	up = &chaparral.Uploader{
 		ID:               resp.Msg.UploaderId,
 		UploadPath:       resp.Msg.UploadPath,
 		Description:      resp.Msg.Description,
 		DigestAlgorithms: resp.Msg.DigestAlgorithms,
 		UserID:           resp.Msg.UserId,
-		Uploads:          make([]Upload, len(resp.Msg.Uploads)),
+		Uploads:          make([]chaparral.Upload, len(resp.Msg.Uploads)),
 	}
 	for i, u := range resp.Msg.Uploads {
 		up.Uploads[i].Digests = u.Digests
@@ -125,7 +106,7 @@ func (cli Client) DeleteUploader(ctx context.Context, id string) error {
 	return err
 }
 
-func (cli Client) Upload(ctx context.Context, uploadPath string, r io.Reader) (result Upload, err error) {
+func (cli Client) Upload(ctx context.Context, uploadPath string, r io.Reader) (result chaparral.Upload, err error) {
 	resp, err := cli.Post(cli.baseURL+uploadPath, "application/octet-stream", r)
 	if err != nil {
 		return result, fmt.Errorf("during upload: %w", err)
@@ -142,7 +123,7 @@ func (cli Client) Upload(ctx context.Context, uploadPath string, r io.Reader) (r
 	if resp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("unexpected upload response status: %q", resp.Status)
 	}
-	var uploadResp server.HandleUploadResponse
+	uploadResp := chaparral.UploadResult{}
 	if jsonErr := json.Unmarshal(byt, &uploadResp); jsonErr != nil {
 		return result, errors.Join(err, jsonErr)
 	}
@@ -207,7 +188,7 @@ func (cli Client) CommitFork(ctx context.Context, commit *Commit, srcStore, srcO
 	return nil
 }
 
-func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Uploader) error {
+func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *chaparral.Uploader) error {
 	if err := commit.valid(); err != nil {
 		return err
 	}
@@ -279,12 +260,12 @@ func (cli Client) DeleteObject(ctx context.Context, storeID string, objectID str
 
 // Download
 func (cli Client) GetContent(ctx context.Context, storeID, objectID, digest, contentPath string) (io.ReadCloser, error) {
-	u := cli.baseURL + server.RouteDownload
+	u := cli.baseURL + chaparral.RouteDownload
 	vals := url.Values{
-		server.QueryStorageRoot: {storeID},
-		server.QueryObjectID:    {objectID},
-		server.QueryContentPath: {contentPath},
-		server.QueryDigest:      {digest},
+		chaparral.QueryStorageRoot: {storeID},
+		chaparral.QueryObjectID:    {objectID},
+		chaparral.QueryContentPath: {contentPath},
+		chaparral.QueryDigest:      {digest},
 	}
 	resp, err := cli.Client.Get(u + "?" + vals.Encode())
 	if err != nil {
@@ -299,7 +280,7 @@ func (cli Client) GetContent(ctx context.Context, storeID, objectID, digest, con
 
 // UploadStage uploads content files in stage that are used in the stage's state. Content for digests
 // already present in the uploader's Digests list are not uploaded
-func (cli Client) UploadStage(ctx context.Context, up *Uploader, stage *Stage, excludeDigests ...string) error {
+func (cli Client) UploadStage(ctx context.Context, up *chaparral.Uploader, stage *Stage, excludeDigests ...string) error {
 	if !slices.Contains(up.DigestAlgorithms, stage.Alg) {
 		return fmt.Errorf("stage and uploader use different digest algorithms")
 	}
@@ -308,7 +289,7 @@ func (cli Client) UploadStage(ctx context.Context, up *Uploader, stage *Stage, e
 			// explicitly ignored
 			continue
 		}
-		if slices.ContainsFunc(up.Uploads, func(existing Upload) bool {
+		if slices.ContainsFunc(up.Uploads, func(existing chaparral.Upload) bool {
 			return existing.Digests[stage.Alg] == digest
 		}) {
 			// already uploaded
