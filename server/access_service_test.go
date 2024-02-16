@@ -12,6 +12,7 @@ import (
 
 	"github.com/bufbuild/connect-go"
 	"github.com/carlmjohnson/be"
+	chap "github.com/srerickson/chaparral"
 	chaparralv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	"github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
 	"github.com/srerickson/chaparral/internal/testutil"
@@ -64,11 +65,11 @@ func TestAccessServiceHandler(t *testing.T) {
 
 	t.Run("download by content path", func(t *testing.T) {
 		vals := url.Values{
-			server.QueryContentPath: {"inventory.json"},
-			server.QueryObjectID:    {objectID},
-			server.QueryStorageRoot: {storeID},
+			chap.QueryContentPath: {"inventory.json"},
+			chap.QueryObjectID:    {objectID},
+			chap.QueryStorageRoot: {storeID},
 		}
-		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
+		u := srv.URL + chap.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
 		if err != nil {
 			t.Fatal("http client error:", err)
@@ -83,11 +84,11 @@ func TestAccessServiceHandler(t *testing.T) {
 
 	t.Run("download by digest", func(t *testing.T) {
 		vals := url.Values{
-			server.QueryDigest:      {"43a43fe8a8a082d3b5343dfaf2fd0c8b8e370675b1f376e92e9994612c33ea255b11298269d72f797399ebb94edeefe53df243643676548f584fb8603ca53a0f"},
-			server.QueryObjectID:    {objectID},
-			server.QueryStorageRoot: {storeID},
+			chap.QueryDigest:      {"43a43fe8a8a082d3b5343dfaf2fd0c8b8e370675b1f376e92e9994612c33ea255b11298269d72f797399ebb94edeefe53df243643676548f584fb8603ca53a0f"},
+			chap.QueryObjectID:    {objectID},
+			chap.QueryStorageRoot: {storeID},
 		}
-		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
+		u := srv.URL + chap.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
 		if err != nil {
 			t.Fatal("http client error:", err)
@@ -102,11 +103,11 @@ func TestAccessServiceHandler(t *testing.T) {
 
 	t.Run("download dir", func(t *testing.T) {
 		vals := url.Values{
-			server.QueryContentPath: {"v1"},
-			server.QueryObjectID:    {objectID},
-			server.QueryStorageRoot: {storeID},
+			chap.QueryContentPath: {"v1"},
+			chap.QueryObjectID:    {objectID},
+			chap.QueryStorageRoot: {storeID},
 		}
-		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
+		u := srv.URL + chap.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
 		be.NilErr(t, err)
 		defer resp.Body.Close()
@@ -115,11 +116,11 @@ func TestAccessServiceHandler(t *testing.T) {
 
 	t.Run("download missing content", func(t *testing.T) {
 		vals := url.Values{
-			server.QueryContentPath: {"nothing"},
-			server.QueryObjectID:    {objectID},
-			server.QueryStorageRoot: {storeID},
+			chap.QueryContentPath: {"nothing"},
+			chap.QueryObjectID:    {objectID},
+			chap.QueryStorageRoot: {storeID},
 		}
-		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
+		u := srv.URL + chap.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
 		be.NilErr(t, err)
 		defer resp.Body.Close()
@@ -128,11 +129,11 @@ func TestAccessServiceHandler(t *testing.T) {
 
 	t.Run("download missing digest", func(t *testing.T) {
 		vals := url.Values{
-			server.QueryDigest:      {"nothing"},
-			server.QueryObjectID:    {objectID},
-			server.QueryStorageRoot: {storeID},
+			chap.QueryDigest:      {"nothing"},
+			chap.QueryObjectID:    {objectID},
+			chap.QueryStorageRoot: {storeID},
 		}
-		u := srv.URL + server.RouteDownload + "?" + vals.Encode()
+		u := srv.URL + chap.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
 		be.NilErr(t, err)
 		defer resp.Body.Close()

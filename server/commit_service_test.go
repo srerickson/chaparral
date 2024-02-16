@@ -14,6 +14,7 @@ import (
 
 	"github.com/bufbuild/connect-go"
 	"github.com/carlmjohnson/be"
+	"github.com/srerickson/chaparral"
 	chapv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	chapv1connect "github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
 	"github.com/srerickson/chaparral/internal/testutil"
@@ -51,7 +52,7 @@ func TestCommitServiceCommit(t *testing.T) {
 			be.NilErr(t, err)
 			be.NilErr(t, upResp.Body.Close())
 			be.Equal(t, http.StatusOK, upResp.StatusCode)
-			var upload server.HandleUploadResponse
+			var upload chaparral.UploadResult
 			be.NilErr(t, json.Unmarshal(respBody, &upload))
 			newState[name] = upload.Digests[alg]
 		}
@@ -135,7 +136,7 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, s
 			return fmt.Errorf("status code: %v", httpResponse.StatusCode)
 		}
 		// check result values
-		var uploadResult server.HandleUploadResponse
+		var uploadResult chaparral.UploadResult
 		if err := json.NewDecoder(httpResponse.Body).Decode(&uploadResult); err != nil {
 			return err
 		}

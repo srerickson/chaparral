@@ -9,6 +9,7 @@ import (
 	"net/url"
 
 	"github.com/bufbuild/connect-go"
+	chap "github.com/srerickson/chaparral"
 	chaparralv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	"github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
 	"github.com/srerickson/chaparral/server/internal/lock"
@@ -17,13 +18,6 @@ import (
 	"github.com/srerickson/ocfl-go/ocflv1"
 	"golang.org/x/exp/slices"
 	"google.golang.org/protobuf/types/known/timestamppb"
-)
-
-const (
-	CommitServiceName = chaparralv1connect.CommitServiceName
-	RouteUpload       = `/` + CommitServiceName + "/" + "upload"
-	QueryUploaderID   = "uploader"
-	QueryStorageRoot  = "storage_root"
 )
 
 var (
@@ -43,7 +37,7 @@ func (s *CommitService) Handler() (string, http.Handler) {
 	route, handle := chaparralv1connect.NewCommitServiceHandler(s, opts...)
 	// new handler that includes upload handler
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == RouteUpload && r.Method == http.MethodPost {
+		if r.URL.Path == chap.RouteUpload && r.Method == http.MethodPost {
 			s.HandleUpload(w, r)
 			return
 		}
@@ -57,8 +51,8 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 	commitCtx := context.WithoutCancel(ctx)
 	authUser := AuthUserFromCtx(ctx)
 	logger := LoggerFromCtx(ctx).With(
-		QueryStorageRoot, req.Msg.StorageRootId,
-		QueryObjectID, req.Msg.ObjectId,
+		chap.QueryStorageRoot, req.Msg.StorageRootId,
+		chap.QueryObjectID, req.Msg.ObjectId,
 		"user_id", authUser.ID,
 	)
 	store, err := s.storageRoot(req.Msg.StorageRootId)
@@ -321,7 +315,7 @@ func (s *CommitService) ListUploaders(ctx context.Context, req *connect.Request[
 // because files are being uploaded to it or because it is being used for a
 // commit.
 func (s *CommitService) DeleteUploader(ctx context.Context, req *connect.Request[chaparralv1.DeleteUploaderRequest]) (*connect.Response[chaparralv1.DeleteUploaderResponse], error) {
-	logger := LoggerFromCtx(ctx).With(QueryUploaderID, req.Msg.UploaderId)
+	logger := LoggerFromCtx(ctx).With(chap.QueryUploaderID, req.Msg.UploaderId)
 	// don't cancel context if client disconnects.
 	noCancelCtx := context.WithoutCancel(ctx)
 	if s.uploadMgr == nil {
@@ -344,24 +338,18 @@ func (s *CommitService) DeleteUploader(ctx context.Context, req *connect.Request
 	return connect.NewResponse(resp), nil
 }
 
-// HandleUploadResponse is the response body for an upload request.
-type HandleUploadResponse struct {
-	uploader.Upload
-	Err string `json:"error,omitempty"`
-}
-
 // Handler for file uploads.
 func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := AuthUserFromCtx(ctx)
 	logger := LoggerFromCtx(ctx)
-	var result HandleUploadResponse
+	result := chap.UploadResult{}
 	defer func() {
 		if err := json.NewEncoder(w).Encode(&result); err != nil {
 			logger.Error(err.Error())
 		}
 	}()
-	uploaderID := r.URL.Query().Get(QueryUploaderID)
+	uploaderID := r.URL.Query().Get(chap.QueryUploaderID)
 	if s.auth != nil && !s.auth.ActionAllowed(ctx, &user, CommitAction) {
 		w.WriteHeader(http.StatusUnauthorized)
 		result.Err = "you don't have permission to upload files"
@@ -439,6 +427,6 @@ func (s *CommitService) AuthorizeInterceptor() connect.UnaryInterceptorFunc {
 }
 
 func uploadPath(uploadID string) string {
-	params := url.Values{QueryUploaderID: {uploadID}}
-	return RouteUpload + "?" + params.Encode()
+	params := url.Values{chap.QueryUploaderID: {uploadID}}
+	return chap.RouteUpload + "?" + params.Encode()
 }
