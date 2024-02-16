@@ -15,7 +15,7 @@ RUN buf generate proto
 RUN sqlc generate -f ./server/chapdb/sqlc.yaml
 
 RUN go mod download
-RUN go build -o chaparral ./server/cmd/chaparral
+RUN go build -o chaparral ./cmd/chaparral
 RUN go build -o chaptoken ./cmd/chaptoken
 
 FROM cgr.dev/chainguard/glibc-dynamic:latest-dev
