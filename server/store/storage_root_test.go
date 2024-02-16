@@ -42,9 +42,14 @@ func TestConcurrentAccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := root.GetObjectManifest(ctx, srcID)
+			m, err := root.GetObjectManifest(ctx, srcID)
 			if err != nil {
 				t.Error(err)
+			}
+			for _, info := range m.Manifest {
+				if len(info.Paths) < 1 {
+					t.Error("manifest has empty path entries")
+				}
 			}
 		}()
 	}

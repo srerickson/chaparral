@@ -180,6 +180,36 @@ func (q *Queries) CreateUploader(ctx context.Context, arg CreateUploaderParams) 
 	return i, err
 }
 
+const deleteObject = `-- name: DeleteObject :exec
+DELETE FROM objects WHERE store_id = ? AND ocfl_id = ?
+`
+
+type DeleteObjectParams struct {
+	StoreID string
+	OcflID  string
+}
+
+func (q *Queries) DeleteObject(ctx context.Context, arg DeleteObjectParams) error {
+	_, err := q.db.ExecContext(ctx, deleteObject, arg.StoreID, arg.OcflID)
+	return err
+}
+
+const deleteObjectContents = `-- name: DeleteObjectContents :exec
+DELETE FROM object_contents WHERE object_id = (
+    SELECT id FROM objects WHERE store_id = ? AND ocfl_id = ?
+)
+`
+
+type DeleteObjectContentsParams struct {
+	StoreID string
+	OcflID  string
+}
+
+func (q *Queries) DeleteObjectContents(ctx context.Context, arg DeleteObjectContentsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteObjectContents, arg.StoreID, arg.OcflID)
+	return err
+}
+
 const deleteUploader = `-- name: DeleteUploader :exec
 DELETE FROM uploaders WHERE id = ?
 `

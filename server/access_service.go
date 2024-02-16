@@ -181,8 +181,6 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	}
 	switch {
 	case contentPath == "":
-		// get contentPath using digest
-		// TODO: use a cache
 		var obj *store.ObjectManifest
 		obj, err = root.GetObjectManifest(ctx, objectID)
 		if err != nil {

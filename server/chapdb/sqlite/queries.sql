@@ -57,6 +57,9 @@ ON CONFLICT(store_id, ocfl_id) DO UPDATE SET
     alg=?5
 RETURNING *;
 
+-- name: DeleteObject :exec
+DELETE FROM objects WHERE store_id = ? AND ocfl_id = ?;
+
 -- name: GetObjectContent :one
 SELECT * FROM object_contents WHERE object_id = ? AND digest = ?;
 
@@ -76,3 +79,8 @@ ON CONFLICT(object_id, digest) DO UPDATE SET
     fixity=?4,
     size=?5
 RETURNING *;    
+
+-- name: DeleteObjectContents :exec
+DELETE FROM object_contents WHERE object_id = (
+    SELECT id FROM objects WHERE store_id = ? AND ocfl_id = ?
+);

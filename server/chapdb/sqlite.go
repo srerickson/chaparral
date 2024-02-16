@@ -15,10 +15,12 @@ import (
 	"github.com/srerickson/ocfl-go"
 )
 
-var sqliteOpts = url.Values{
-	"_journal": {"WAL"},
-	"_sync":    {"NORMAL"},
-	"_timeout": {"5000"},
+func sqliteOpts() url.Values {
+	return url.Values{
+		"_journal": {"WAL"},
+		"_sync":    {"NORMAL"},
+		"_timeout": {"5000"},
+	}
 }
 
 type SQLiteDB sql.DB
@@ -28,14 +30,16 @@ func Open(driver string, file string, migrate bool) (*sql.DB, error) {
 	switch driver {
 	case "sqlite3":
 		var err error
+		opts := sqliteOpts()
 		if file == ":memory:" {
-			sqliteOpts["cache"] = []string{"shared"}
-			sqliteOpts["mode"] = []string{"memory"}
+			opts["cache"] = []string{"shared"}
+			opts["mode"] = []string{"memory"}
 		}
-		db, err = sql.Open(driver, file+"?"+url.Values(sqliteOpts).Encode())
+		db, err = sql.Open(driver, file+"?"+url.Values(opts).Encode())
 		if err != nil {
 			return nil, err
 		}
+		db.SetMaxOpenConns(1)
 	default:
 		return nil, fmt.Errorf("unsupported driver %q", driver)
 	}
@@ -229,4 +233,27 @@ func (db *SQLiteDB) GetObjectManifest(ctx context.Context, storeID, objID string
 	}
 
 	return obj, nil
+}
+
+func (db *SQLiteDB) DeleteObject(ctx context.Context, storeID, objectID string) error {
+	tx, err := db.sqlDB().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qry := sqlite.New(db.sqlDB()).WithTx(tx)
+	if err := qry.DeleteObjectContents(ctx, sqlite.DeleteObjectContentsParams{
+		StoreID: storeID,
+		OcflID:  objectID,
+	}); err != nil {
+		return err
+	}
+	if err := qry.DeleteObject(ctx, sqlite.DeleteObjectParams{
+		StoreID: storeID,
+		OcflID:  objectID,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit()
+
 }

@@ -35,13 +35,14 @@ type StorageRoot struct {
 
 	cache ObjectCache
 
-	inflight   map[string]chan struct{}
-	inflightMx sync.Mutex
+	syncing   map[string]chan struct{}
+	syncingMx sync.Mutex
 }
 
 type ObjectCache interface {
 	SetObjectManifest(ctx context.Context, m *chaparral.ObjectManifest) error
 	GetObjectManifest(ctx context.Context, storeID string, objID string) (*chaparral.ObjectManifest, error)
+	DeleteObject(ctx context.Context, storeID string, objID string) error
 }
 
 // StorageRootInitializer is used to configure new storage roots that don't exist
@@ -53,13 +54,13 @@ type StorageRootInitializer struct {
 
 func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageRootInitializer, cache ObjectCache) *StorageRoot {
 	return &StorageRoot{
-		id:       id,
-		fs:       fsys,
-		path:     path,
-		init:     init,
-		locker:   lock.NewLocker(),
-		inflight: map[string]chan struct{}{},
-		cache:    cache,
+		id:      id,
+		fs:      fsys,
+		path:    path,
+		init:    init,
+		locker:  lock.NewLocker(),
+		syncing: map[string]chan struct{}{},
+		cache:   cache,
 	}
 }
 
@@ -249,21 +250,19 @@ func (store *StorageRoot) getObjectManifest(ctx context.Context, objectID string
 }
 
 func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error {
-	wait, first := store.newInflight(objectID)
-	if !first {
-		<-wait // wait for result from first
+	done, syncing := store.getObjectSync(objectID)
+	if syncing {
+		<-done // wait for result from a current request
 		return nil
 	}
-	defer func() {
-		store.inflightMx.Lock()
-		delete(store.inflight, objectID)
-		store.inflightMx.Unlock()
-		close(wait)
-	}()
-	// we are first.
 	// there isn't an existing request.
-	// do the request, send it to any
-	// others and clean up
+	// make it and close the wait channel
+	defer func() {
+		store.syncingMx.Lock()
+		delete(store.syncing, objectID)
+		close(done)
+		store.syncingMx.Unlock()
+	}()
 	obj, err := store.base.GetObject(ctx, objectID)
 	if err != nil {
 		return err
@@ -271,7 +270,7 @@ func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error
 	man := &chaparral.ObjectManifest{
 		StorageRootID:   store.id,
 		ObjectID:        obj.Inventory.ID,
-		Path:            obj.ObjectRoot.Path,
+		Path:            obj.Path,
 		DigestAlgorithm: obj.Inventory.DigestAlgorithm,
 		Manifest:        chaparral.Manifest{},
 		Spec:            obj.Inventory.Type.String(),
@@ -290,15 +289,15 @@ func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error
 	return nil
 }
 
-func (store *StorageRoot) newInflight(objectID string) (chan struct{}, bool) {
-	store.inflightMx.Lock()
-	defer store.inflightMx.Unlock()
-	if val, ok := store.inflight[objectID]; ok {
-		return val, false
+func (store *StorageRoot) getObjectSync(objectID string) (chan struct{}, bool) {
+	store.syncingMx.Lock()
+	defer store.syncingMx.Unlock()
+	if val, ok := store.syncing[objectID]; ok {
+		return val, true
 	}
 	ch := make(chan struct{})
-	store.inflight[objectID] = ch
-	return ch, true
+	store.syncing[objectID] = ch
+	return ch, false
 }
 
 func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *ocfl.Stage, opts ...ocflv1.CommitOption) error {
@@ -310,7 +309,17 @@ func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *oc
 		return err
 	}
 	defer unlock()
-	return store.base.Commit(ctx, objectID, stage, opts...)
+	if err := store.base.Commit(ctx, objectID, stage, opts...); err != nil {
+		var commitErr *ocflv1.CommitError
+		if errors.As(err, &commitErr) && commitErr.Dirty {
+			err = fmt.Errorf("commit error with possible object corruption: %w", err)
+		}
+		return err
+	}
+	if err := store.syncObject(ctx, objectID); err != nil {
+		return fmt.Errorf("while syncing object, post-commit: %w", err)
+	}
+	return nil
 }
 
 func (store *StorageRoot) DeleteObject(ctx context.Context, objectID string) error {
@@ -326,7 +335,13 @@ func (store *StorageRoot) DeleteObject(ctx context.Context, objectID string) err
 	if err != nil {
 		return err
 	}
-	return store.fs.RemoveAll(ctx, obj.Path)
+	if err := store.fs.RemoveAll(ctx, obj.Path); err != nil {
+		return fmt.Errorf("error deleting object: %w", err)
+	}
+	if err := store.cache.DeleteObject(ctx, store.id, objectID); err != nil {
+		return fmt.Errorf("clearing cache: %w", err)
+	}
+	return nil
 }
 
 func (store *StorageRoot) Validate(ctx context.Context, opts ...ocflv1.ValidationOption) (*validation.Result, error) {
