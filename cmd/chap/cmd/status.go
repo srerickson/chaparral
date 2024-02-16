@@ -49,7 +49,7 @@ func (diff *statusCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Co
 		"local object version", fmt.Sprintf("%s (%d)", proj.ObjectID, proj.Version),
 	)
 
-	head, err := cli.GetObjectState(ctx, root, objectID, 0)
+	head, err := cli.GetObjectVersion(ctx, root, objectID, 0)
 	if err != nil {
 		if client.IsNotFound(err) {
 			fmt.Fprintln(os.Stderr, "Use `push` to upload new object version.")
@@ -63,7 +63,7 @@ func (diff *statusCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Co
 	if err != nil {
 		return err
 	}
-	result, err := df.Diff(head.State, stage.State)
+	result, err := df.Diff(head.State.PathMap(), stage.State)
 	if err != nil {
 		return err
 	}

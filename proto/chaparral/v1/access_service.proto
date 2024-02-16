@@ -7,13 +7,16 @@ import "google/protobuf/timestamp.proto";
 
 // AccessService provides endpoints for reading OCFL objects.
 service AccessService {    
-    // GetObjectState returns logical state, and other information for a given
-    // OCFL object version.
-    rpc GetObjectState(GetObjectStateRequest) returns (GetObjectStateResponse) {}
+    // GetObjectVersion returns details about the logical state of an OCFL object
+    // version.
+    rpc GetObjectVersion(GetObjectVersionRequest) returns (GetObjectVersionResponse) {}
+    // GetObjectManifest returns digests, sizes, and fixity information for all
+    // content associated with an object across all its versions.
+    rpc GetObjectManifest(GetObjectManifestRequest) returns (GetObjectManifestResponse) {}
 }
 
-// GetObjectStateRequest is used to request information about an object's state.
-message GetObjectStateRequest{
+// GetObjectVersionRequest is used to request information about an object's state.
+message GetObjectVersionRequest{
     // The storage root id for the object to access. If not set, the default
     // storage root is used.
     string storage_root_id = 1;
@@ -24,8 +27,8 @@ message GetObjectStateRequest{
     int32 version = 3;
 }
 
-// GetObjectStateResponse represents state for a specific object version.
-message GetObjectStateResponse {
+// GetObjectVersionResponse represents state for a specific object version.
+message GetObjectVersionResponse {
     // The object's storage root id. The empty string corresponds to the default
     // storage root.
     string storage_root_id = 1;
@@ -37,15 +40,58 @@ message GetObjectStateResponse {
     int32 head = 4;
     // The object's digest algorithm (sha512 or sha256)
     string digest_algorithm = 5;
-    // The object's logical state represented as a map from file paths to digest
-    // values using the object's digest algorithm.
-    map<string,string> state = 6;
+    // The object's logical state represented as a map from digests to 
+    // file info. Path entries in the file info represent logical
+    // filenames for the object version state.
+    map<string,FileInfo> state = 6;
     // The message associated with the object version
-    string messsage = 7;
+    string message = 7;
     // The user information associated with the object version
     User user = 8;
     // The timestamp associated witht he object version
     google.protobuf.Timestamp created = 9;
     // The OCFL specification version for the object version.
     string spec = 10;
+}
+
+
+// GetObjectManifestRequest is used to request details about all content files
+// in an object
+message GetObjectManifestRequest{
+    // The storage root id for the object to access. If not set, the default
+    // storage root is used.
+    string storage_root_id = 1;
+    // The object id to access (required).
+    string object_id = 2;
+}
+
+
+// GetObjectManifestResponse represents all content files stored 
+// in an object across all versions
+message GetObjectManifestResponse{
+    // The storage root id for the object
+    string storage_root_id = 1;
+    // The object id for the manifest
+    string object_id = 2;
+    // The object's path relative to the OCFL Storage Root
+    // that contains it
+    string path = 3;
+    // digest algorithm used for manifest keys
+    string digest_algorithm = 4;
+    // manifest is a map of digest values to file info. Path
+    // entries represent content paths relative to root of the
+    // OCFL object
+    map<string,FileInfo> manifest = 5;
+    // The OCFL specification version for the object
+    string spec = 6;
+}
+
+
+message FileInfo {
+    // file size
+    int64 size = 1;
+    // one or more file paths for the content
+    repeated string paths = 2;
+    // map of alternate digests alg -> digest
+    map<string,string> fixity = 3;
 }

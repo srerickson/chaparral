@@ -13,6 +13,7 @@ import (
 	"github.com/bufbuild/connect-go"
 	chaparralv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	"github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
+	"github.com/srerickson/chaparral/server/store"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -42,22 +43,22 @@ func (s *AccessService) Handler() (string, http.Handler) {
 	return route, fn
 }
 
-func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request[chaparralv1.GetObjectStateRequest]) (*connect.Response[chaparralv1.GetObjectStateResponse], error) {
+func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Request[chaparralv1.GetObjectVersionRequest]) (*connect.Response[chaparralv1.GetObjectVersionResponse], error) {
 	logger := LoggerFromCtx(ctx).With(
 		QueryStorageRoot, req.Msg.StorageRootId,
 		QueryObjectID, req.Msg.ObjectId,
 		"version", req.Msg.Version,
 	)
 	user := AuthUserFromCtx(ctx)
+	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
+		err := errors.New("you don't have permission to read from the storage root")
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
 	store, err := s.storageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
-	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
-		err = errors.New("you don't have permission to read from the storage root")
-		return nil, connect.NewError(connect.CodePermissionDenied, err)
-	}
-	obj, err := store.GetObjectState(ctx, req.Msg.ObjectId, int(req.Msg.Version))
+	obj, err := store.GetObjectVersion(ctx, req.Msg.ObjectId, int(req.Msg.Version))
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, connect.NewError(connect.CodeNotFound, err)
@@ -66,19 +67,67 @@ func (s *AccessService) GetObjectState(ctx context.Context, req *connect.Request
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	defer obj.Close()
-	resp := &chaparralv1.GetObjectStateResponse{
-		StorageRootId:   req.Msg.StorageRootId,
-		ObjectId:        obj.ID,
-		DigestAlgorithm: obj.Alg,
+	resp := &chaparralv1.GetObjectVersionResponse{
+		StorageRootId:   obj.StorageRootID,
+		ObjectId:        obj.ObjectID,
+		DigestAlgorithm: obj.DigestAlgorithm,
 		Version:         int32(obj.Version),
 		Head:            int32(obj.Head),
-		Spec:            obj.Spec.String(),
-		Messsage:        obj.Message,
+		Spec:            obj.Spec,
+		Message:         obj.Message,
 		Created:         timestamppb.New(obj.Created),
-		State:           obj.State.PathMap(),
+		State:           map[string]*chaparralv1.FileInfo{},
+	}
+	for d, info := range obj.State {
+		resp.State[d] = &chaparralv1.FileInfo{
+			Paths:  info.Paths,
+			Size:   info.Size,
+			Fixity: info.Fixity,
+		}
 	}
 	if obj.User != nil {
 		resp.User = (*User)(obj.User).AsProto()
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (s *AccessService) GetObjectManifest(ctx context.Context, req *connect.Request[chaparralv1.GetObjectManifestRequest]) (*connect.Response[chaparralv1.GetObjectManifestResponse], error) {
+	logger := LoggerFromCtx(ctx).With(
+		QueryStorageRoot, req.Msg.StorageRootId,
+		QueryObjectID, req.Msg.ObjectId,
+	)
+	user := AuthUserFromCtx(ctx)
+	if s.auth != nil && !s.auth.RootActionAllowed(ctx, &user, ReadAction, req.Msg.StorageRootId) {
+		err := errors.New("you don't have permission to read from the storage root")
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	store, err := s.storageRoot(req.Msg.StorageRootId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+	obj, err := store.GetObjectManifest(ctx, req.Msg.ObjectId)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, connect.NewError(connect.CodeNotFound, err)
+		}
+		logger.Error(err.Error())
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	defer obj.Close()
+	resp := &chaparralv1.GetObjectManifestResponse{
+		StorageRootId:   obj.StorageRootID,
+		ObjectId:        obj.ObjectID,
+		Path:            obj.Path,
+		DigestAlgorithm: obj.DigestAlgorithm,
+		Spec:            obj.Spec,
+		Manifest:        map[string]*chaparralv1.FileInfo{},
+	}
+	for d, info := range obj.Manifest {
+		resp.Manifest[d] = &chaparralv1.FileInfo{
+			Paths:  info.Paths,
+			Size:   info.Size,
+			Fixity: info.Fixity,
+		}
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -109,7 +158,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	store, err := srv.storageRoot(storeID)
+	root, err := srv.storageRoot(storeID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -126,16 +175,14 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	// make sure storage root's base is initialized
-	if err = store.Ready(ctx); err != nil {
+	if err = root.Ready(ctx); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	switch {
 	case contentPath == "":
-		// get contentPath using digest
-		// TODO: use a cache
-		var obj *ObjectState
-		obj, err = store.GetObjectState(ctx, objectID, 0)
+		var obj *store.ObjectManifest
+		obj, err = root.GetObjectManifest(ctx, objectID)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				w.WriteHeader(http.StatusNotFound)
@@ -146,7 +193,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		}
 		defer obj.Close()
 		objectRoot = obj.Path
-		if p := obj.Manifest.DigestPaths(digest); len(p) > 0 {
+		if p := obj.Manifest[digest].Paths; len(p) > 0 {
 			contentPath = p[0]
 		}
 		if contentPath == "" {
@@ -161,15 +208,15 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 			return
 		}
 		var objPath string
-		objPath, err = store.ResolveID(objectID)
+		objPath, err = root.ResolveID(objectID)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		objectRoot = path.Join(store.Path(), objPath)
+		objectRoot = path.Join(root.Path(), objPath)
 	}
 	fullPath := path.Join(objectRoot, contentPath)
-	f, err := store.FS().OpenFile(ctx, fullPath)
+	f, err := root.FS().OpenFile(ctx, fullPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			w.WriteHeader(http.StatusNotFound)

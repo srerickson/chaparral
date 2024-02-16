@@ -5,8 +5,26 @@
 package sqlite
 
 import (
+	"database/sql"
 	"time"
 )
+
+type Object struct {
+	ID      int64
+	StoreID string
+	OcflID  string
+	Path    string
+	Alg     string
+	Spec    string
+}
+
+type ObjectContent struct {
+	ObjectID int64
+	Digest   string
+	Paths    []byte
+	Fixity   []byte
+	Size     int64
+}
 
 type Upload struct {
 	ID         string
@@ -21,4 +39,14 @@ type Uploader struct {
 	Algs        string
 	Description string
 	CreatedAt   time.Time
+}
+
+type Version struct {
+	ObjectID    int64
+	Num         int64
+	State       []byte
+	Message     string
+	UserName    sql.NullString
+	UserAddress sql.NullString
+	Created     time.Time
 }

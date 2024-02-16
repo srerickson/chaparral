@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/bufbuild/connect-go"
+	"github.com/srerickson/chaparral"
 	chapv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	chapv1connect "github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
 	"github.com/srerickson/chaparral/server"
@@ -227,51 +227,44 @@ func (cli Client) CommitUploader(ctx context.Context, commit *Commit, up *Upload
 	return nil
 }
 
-type ObjectState struct {
-	StorageRootID   string
-	ObjectID        string
-	Spec            string
-	Version         int
-	DigestAlgorithm string
-	Head            int
-	State           map[string]string
-	Messsage        string
-	User            ocfl.User
-	Created         time.Time
-}
-
-func objectStateFromProto(proto *chapv1.GetObjectStateResponse) *ObjectState {
-	state := &ObjectState{
+func objectVersionFromProto(proto *chapv1.GetObjectVersionResponse) *chaparral.ObjectVersion {
+	state := &chaparral.ObjectVersion{
 		StorageRootID:   proto.StorageRootId,
 		ObjectID:        proto.ObjectId,
 		Spec:            proto.Spec,
 		Version:         int(proto.Version),
 		DigestAlgorithm: proto.DigestAlgorithm,
 		Head:            int(proto.Head),
-		State:           maps.Clone(proto.State),
-		Messsage:        proto.Messsage,
+		Message:         proto.Message,
+		State:           chaparral.Manifest{},
+	}
+	for digest, info := range proto.State {
+		state.State[digest] = chaparral.FileInfo{
+			Size:   info.Size,
+			Paths:  info.Paths,
+			Fixity: info.Fixity,
+		}
 	}
 	if proto.Created != nil {
 		state.Created = proto.Created.AsTime()
 	}
 	if proto.User != nil {
-		state.User.Name = proto.User.Name
-		state.User.Address = proto.User.Address
+		state.User = &ocfl.User{Name: proto.User.Name, Address: proto.User.Address}
 	}
 	return state
 }
 
-func (cli Client) GetObjectState(ctx context.Context, storeID string, objectID string, ver int) (*ObjectState, error) {
-	req := &chapv1.GetObjectStateRequest{
+func (cli Client) GetObjectVersion(ctx context.Context, storeID string, objectID string, ver int) (*chaparral.ObjectVersion, error) {
+	req := &chapv1.GetObjectVersionRequest{
 		StorageRootId: storeID,
 		ObjectId:      objectID,
 		Version:       int32(ver),
 	}
-	resp, err := cli.access.GetObjectState(ctx, connect.NewRequest(req))
+	resp, err := cli.access.GetObjectVersion(ctx, connect.NewRequest(req))
 	if err != nil {
 		return nil, err
 	}
-	state := objectStateFromProto(resp.Msg)
+	state := objectVersionFromProto(resp.Msg)
 	return state, nil
 }
 

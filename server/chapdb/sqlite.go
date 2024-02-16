@@ -5,23 +5,23 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/url"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/srerickson/chaparral"
 	sqlite "github.com/srerickson/chaparral/server/chapdb/sqlite_gen"
 	"github.com/srerickson/chaparral/server/uploader"
 	"github.com/srerickson/ocfl-go"
 )
 
-var (
-	sqliteOpts = url.Values{
+func sqliteOpts() url.Values {
+	return url.Values{
 		"_journal": {"WAL"},
 		"_sync":    {"NORMAL"},
 		"_timeout": {"5000"},
 	}
-)
+}
 
 type SQLiteDB sql.DB
 
@@ -30,12 +30,16 @@ func Open(driver string, file string, migrate bool) (*sql.DB, error) {
 	switch driver {
 	case "sqlite3":
 		var err error
-		connStr := file + "?" + sqliteOpts.Encode()
-		slog.Debug("sqlite3 db", "file", connStr)
-		db, err = sql.Open(driver, file+"?"+url.Values(sqliteOpts).Encode())
+		opts := sqliteOpts()
+		if file == ":memory:" {
+			opts["cache"] = []string{"shared"}
+			opts["mode"] = []string{"memory"}
+		}
+		db, err = sql.Open(driver, file+"?"+url.Values(opts).Encode())
 		if err != nil {
 			return nil, err
 		}
+		db.SetMaxOpenConns(1)
 	default:
 		return nil, fmt.Errorf("unsupported driver %q", driver)
 	}
@@ -154,4 +158,102 @@ func (db *SQLiteDB) CountUploaders(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return int(n), nil
+}
+
+func (db *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.ObjectManifest) error {
+	tx, err := db.sqlDB().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qry := sqlite.New(db.sqlDB()).WithTx(tx)
+	dbObj, err := qry.CreateObject(ctx, sqlite.CreateObjectParams{
+		StoreID: obj.StorageRootID,
+		OcflID:  obj.ObjectID,
+		Path:    obj.Path,
+		Spec:    obj.Spec,
+		Alg:     obj.DigestAlgorithm,
+	})
+	if err != nil {
+		return err
+	}
+	for digest, info := range obj.Manifest {
+		fixBytes, err := json.Marshal(info.Fixity)
+		if err != nil {
+			return err
+		}
+		pathBytes, err := json.Marshal(info.Paths)
+		if err != nil {
+			return err
+		}
+		_, err = qry.CreateObjectContent(ctx, sqlite.CreateObjectContentParams{
+			ObjectID: dbObj.ID,
+			Digest:   digest,
+			Paths:    pathBytes,
+			Fixity:   fixBytes,
+			Size:     info.Size,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db *SQLiteDB) GetObjectManifest(ctx context.Context, storeID, objID string) (*chaparral.ObjectManifest, error) {
+	qry := sqlite.New(db.sqlDB())
+	objDB, err := qry.GetObject(ctx, sqlite.GetObjectParams{
+		StoreID: storeID,
+		OcflID:  objID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	obj := &chaparral.ObjectManifest{
+		ObjectID:        objDB.OcflID,
+		StorageRootID:   objDB.StoreID,
+		Path:            objDB.Path,
+		DigestAlgorithm: objDB.Alg,
+		Spec:            objDB.Spec,
+		Manifest:        chaparral.Manifest{},
+	}
+	conts, err := qry.GetObjectContents(ctx, objDB.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range conts {
+		info := chaparral.FileInfo{Size: c.Size}
+		if err := json.Unmarshal(c.Paths, &info.Paths); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(c.Fixity, &info.Fixity); err != nil {
+			return nil, err
+		}
+		obj.Manifest[c.Digest] = info
+	}
+
+	return obj, nil
+}
+
+func (db *SQLiteDB) DeleteObject(ctx context.Context, storeID, objectID string) error {
+	tx, err := db.sqlDB().BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qry := sqlite.New(db.sqlDB()).WithTx(tx)
+	if err := qry.DeleteObjectContents(ctx, sqlite.DeleteObjectContentsParams{
+		StoreID: storeID,
+		OcflID:  objectID,
+	}); err != nil {
+		return err
+	}
+	if err := qry.DeleteObject(ctx, sqlite.DeleteObjectParams{
+		StoreID: storeID,
+		OcflID:  objectID,
+	}); err != nil {
+		return err
+	}
+	return tx.Commit()
+
 }

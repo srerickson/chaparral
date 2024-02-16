@@ -14,6 +14,7 @@ import (
 	"github.com/srerickson/chaparral/server"
 	"github.com/srerickson/chaparral/server/backend"
 	"github.com/srerickson/chaparral/server/chapdb"
+	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/chaparral/server/uploader"
 	"github.com/srerickson/ocfl-go"
 	"log/slog"
@@ -82,6 +83,15 @@ func main() {
 		loggerOptions.LogLevel = slog.LevelDebug
 	}
 	logger := httplog.NewLogger("chaparral", loggerOptions)
+	// sqlite3 for server state
+	db, err := chapdb.Open("sqlite3", conf.StateDB, true)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	defer db.Close()
+	chapDB := (*chapdb.SQLiteDB)(db)
+
 	backend, err := newBackend(conf.Backend)
 	if err != nil {
 		logger.Error(fmt.Sprintf("initializing backend: %v", err))
@@ -96,16 +106,16 @@ func main() {
 		logger.Error(fmt.Sprintf("backend not accessible: %v", err), "storage", conf.Backend)
 	}
 	var rootPaths []string
-	var roots []*server.StorageRoot
+	var roots []*store.StorageRoot
 	for _, rootConfig := range conf.Roots {
-		var init *server.StorageInitializer
+		var init *store.StorageRootInitializer
 		if rootConfig.Init != nil {
-			init = &server.StorageInitializer{
+			init = &store.StorageRootInitializer{
 				Description: rootConfig.Init.Description,
 				Layout:      rootConfig.Init.Layout,
 			}
 		}
-		r := server.NewStorageRoot(rootConfig.ID, fsys, rootConfig.Path, init)
+		r := store.NewStorageRoot(rootConfig.ID, fsys, rootConfig.Path, init, chapDB)
 		roots = append(roots, r)
 		rootPaths = append(rootPaths, rootConfig.Path)
 	}
@@ -116,14 +126,6 @@ func main() {
 		logger.Error("error loading auth keyfile", "error", err.Error())
 		os.Exit(1)
 	}
-	// sqlite3 for server state
-	db, err := chapdb.Open("sqlite3", conf.StateDB, true)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	defer db.Close()
-	chapDB := (*chapdb.SQLiteDB)(db)
 
 	// upload manager is required for allowing uploads
 	var mgr *uploader.Manager

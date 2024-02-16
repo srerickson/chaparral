@@ -43,20 +43,23 @@ func TestAccessServiceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal("in test setup:", err)
 	}
-	expectState, err := obj.State(0)
-	if err != nil {
-		t.Fatal("in test setup:", err)
-	}
+	expectState := obj.Inventory.Version(0).State
 	t.Run("GetObjectState()", func(t *testing.T) {
 		chap := chaparralv1connect.NewAccessServiceClient(httpClient, srv.URL)
 		ctx := context.Background()
-		req := connect.NewRequest(&chaparralv1.GetObjectStateRequest{
+		req := connect.NewRequest(&chaparralv1.GetObjectVersionRequest{
 			StorageRootId: storeID,
 			ObjectId:      objectID,
 		})
-		resp, err := chap.GetObjectState(ctx, req)
+		resp, err := chap.GetObjectVersion(ctx, req)
 		be.NilErr(t, err)
-		be.DeepEqual(t, resp.Msg.State, expectState.PathMap())
+		got := map[string]string{}
+		for d, info := range resp.Msg.State {
+			for _, p := range info.Paths {
+				got[p] = d
+			}
+		}
+		be.DeepEqual(t, expectState.PathMap(), got)
 	})
 
 	t.Run("download by content path", func(t *testing.T) {

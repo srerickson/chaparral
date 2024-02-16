@@ -11,7 +11,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
-	"path/filepath"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -20,6 +19,7 @@ import (
 	"github.com/srerickson/chaparral/server"
 	"github.com/srerickson/chaparral/server/backend"
 	"github.com/srerickson/chaparral/server/chapdb"
+	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/chaparral/server/uploader"
 	"github.com/srerickson/ocfl-go/backend/local"
 	"github.com/srerickson/ocfl-go/extension"
@@ -27,28 +27,26 @@ import (
 
 var (
 	s3Env     = "CHAPARRAL_TEST_S3"
-	storeConf = server.StorageInitializer{
+	storeConf = store.StorageRootInitializer{
 		Description: "test store",
 		Layout:      extension.Ext0003().Name(),
 	}
 )
 
-type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, store *server.StorageRoot)
+type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, store *store.StorageRoot)
 
 func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{}))
 	authFn := server.DefaultAuthUserFunc(&testKey().PublicKey)
-	tmpData := t.TempDir()
 	opts := []server.Option{
 		server.WithLogger(logger),
 		server.WithAuthUserFunc(authFn),
 		server.WithAuthorizer(server.DefaultPermissions()),
 	}
 	t.Run("local-root", func(t *testing.T) {
-		db, err := chapdb.Open("sqlite3", filepath.Join(tmpData, "local-db.sqlite"), true)
+		db, err := chapdb.Open("sqlite3", ":memory:", true)
 		if err != nil {
-			logger.Error(err.Error())
-			os.Exit(1)
+			t.Fatal(err)
 		}
 		defer db.Close()
 		store := NewStoreTempDir(t)
@@ -66,10 +64,9 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	})
 	if WithS3() {
 		t.Run("s3-root", func(t *testing.T) {
-			db, err := chapdb.Open("sqlite3", filepath.Join(tmpData, "s3-db.sqlite"), true)
+			db, err := chapdb.Open("sqlite3", ":memory:", true)
 			if err != nil {
-				logger.Error(err.Error())
-				os.Exit(1)
+				t.Fatal(err)
 			}
 			defer db.Close()
 			root := NewStoreS3(t)
@@ -105,13 +102,18 @@ func S3Session() (*s3.S3, error) {
 }
 
 // Testdata storage root
-func NewStoreTestdata(t *testing.T, testdataPath string) *server.StorageRoot {
+func NewStoreTestdata(t *testing.T, testdataPath string) *store.StorageRoot {
+	t.Helper()
 	fsys, err := local.NewFS(testdataPath)
 	if err != nil {
 		t.Fatal(err)
 	}
+	db, err := chapdb.Open("sqlite3", ":memory:", true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dir := path.Join("storage-roots", "root-01")
-	root := server.NewStorageRoot("test", fsys, dir, nil)
+	root := store.NewStorageRoot("test", fsys, dir, nil, (*chapdb.SQLiteDB)(db))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -119,12 +121,17 @@ func NewStoreTestdata(t *testing.T, testdataPath string) *server.StorageRoot {
 }
 
 // new temp directory storage root for testing
-func NewStoreTempDir(t *testing.T) *server.StorageRoot {
+func NewStoreTempDir(t *testing.T) *store.StorageRoot {
+	t.Helper()
 	fsys, err := local.NewFS(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := server.NewStorageRoot("test", fsys, "ocfl", &storeConf)
+	db, err := chapdb.Open("sqlite3", ":memory:", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, (*chapdb.SQLiteDB)(db))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -132,13 +139,18 @@ func NewStoreTempDir(t *testing.T) *server.StorageRoot {
 }
 
 // new S3 storage root for testing
-func NewStoreS3(t *testing.T) *server.StorageRoot {
+func NewStoreS3(t *testing.T) *store.StorageRoot {
+	t.Helper()
 	backend := S3Backend(t)
 	fsys, err := backend.NewFS()
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := server.NewStorageRoot("test", fsys, "ocfl", &storeConf)
+	db, err := chapdb.Open("sqlite3", ":memory:", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, (*chapdb.SQLiteDB)(db))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +164,7 @@ func TempDirBackend(t *testing.T) *backend.FileBackend {
 
 // S3 backend with temp bucket for testing
 func S3Backend(t *testing.T) *backend.S3Backend {
+	t.Helper()
 	bucket, err := TempBucket(t)
 	if err != nil {
 		t.Fatal(err)

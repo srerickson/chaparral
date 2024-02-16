@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	chaparral = "chaparral"
-	dirMode   = 0775
-	fileMode  = 0664
+	chaparralDir = "chaparral"
+	dirMode      = 0775
+	fileMode     = 0664
 )
 
 type rootCmd struct {

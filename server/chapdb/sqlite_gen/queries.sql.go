@@ -11,7 +11,7 @@ import (
 )
 
 const countUploaders = `-- name: CountUploaders :one
-SELECT COUNT(*) from uploaders
+SELECT COUNT(*) FROM uploaders
 `
 
 func (q *Queries) CountUploaders(ctx context.Context) (int64, error) {
@@ -19,6 +19,91 @@ func (q *Queries) CountUploaders(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createObject = `-- name: CreateObject :one
+INSERT INTO objects (
+    store_id,
+    ocfl_id,
+    path,
+    spec,
+    alg
+) VALUES (?1, ?2, ?3, ?4, ?5)
+ON CONFLICT(store_id, ocfl_id) DO UPDATE SET
+    path=?3,
+    spec=?4,
+    alg=?5
+RETURNING id, store_id, ocfl_id, path, alg, spec
+`
+
+type CreateObjectParams struct {
+	StoreID string
+	OcflID  string
+	Path    string
+	Spec    string
+	Alg     string
+}
+
+func (q *Queries) CreateObject(ctx context.Context, arg CreateObjectParams) (Object, error) {
+	row := q.db.QueryRowContext(ctx, createObject,
+		arg.StoreID,
+		arg.OcflID,
+		arg.Path,
+		arg.Spec,
+		arg.Alg,
+	)
+	var i Object
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OcflID,
+		&i.Path,
+		&i.Alg,
+		&i.Spec,
+	)
+	return i, err
+}
+
+const createObjectContent = `-- name: CreateObjectContent :one
+INSERT INTO object_contents (
+    object_id,
+    digest,
+    paths,
+    fixity,
+    size
+) VALUES (?1, ?2, ?3, ?4, ?5)
+ON CONFLICT(object_id, digest) DO UPDATE SET
+    paths=?3,
+    fixity=?4,
+    size=?5
+RETURNING object_id, digest, paths, fixity, size
+`
+
+type CreateObjectContentParams struct {
+	ObjectID int64
+	Digest   string
+	Paths    []byte
+	Fixity   []byte
+	Size     int64
+}
+
+func (q *Queries) CreateObjectContent(ctx context.Context, arg CreateObjectContentParams) (ObjectContent, error) {
+	row := q.db.QueryRowContext(ctx, createObjectContent,
+		arg.ObjectID,
+		arg.Digest,
+		arg.Paths,
+		arg.Fixity,
+		arg.Size,
+	)
+	var i ObjectContent
+	err := row.Scan(
+		&i.ObjectID,
+		&i.Digest,
+		&i.Paths,
+		&i.Fixity,
+		&i.Size,
+	)
+	return i, err
 }
 
 const createUpload = `-- name: CreateUpload :one
@@ -95,8 +180,38 @@ func (q *Queries) CreateUploader(ctx context.Context, arg CreateUploaderParams) 
 	return i, err
 }
 
+const deleteObject = `-- name: DeleteObject :exec
+DELETE FROM objects WHERE store_id = ? AND ocfl_id = ?
+`
+
+type DeleteObjectParams struct {
+	StoreID string
+	OcflID  string
+}
+
+func (q *Queries) DeleteObject(ctx context.Context, arg DeleteObjectParams) error {
+	_, err := q.db.ExecContext(ctx, deleteObject, arg.StoreID, arg.OcflID)
+	return err
+}
+
+const deleteObjectContents = `-- name: DeleteObjectContents :exec
+DELETE FROM object_contents WHERE object_id = (
+    SELECT id FROM objects WHERE store_id = ? AND ocfl_id = ?
+)
+`
+
+type DeleteObjectContentsParams struct {
+	StoreID string
+	OcflID  string
+}
+
+func (q *Queries) DeleteObjectContents(ctx context.Context, arg DeleteObjectContentsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteObjectContents, arg.StoreID, arg.OcflID)
+	return err
+}
+
 const deleteUploader = `-- name: DeleteUploader :exec
-DELETE from uploaders where id = ?
+DELETE FROM uploaders WHERE id = ?
 `
 
 func (q *Queries) DeleteUploader(ctx context.Context, id string) error {
@@ -105,7 +220,7 @@ func (q *Queries) DeleteUploader(ctx context.Context, id string) error {
 }
 
 const deleteUploads = `-- name: DeleteUploads :exec
-DELETE from uploads where uploader_id = ?
+DELETE FROM uploads WHERE uploader_id = ?
 `
 
 func (q *Queries) DeleteUploads(ctx context.Context, uploaderID string) error {
@@ -113,8 +228,86 @@ func (q *Queries) DeleteUploads(ctx context.Context, uploaderID string) error {
 	return err
 }
 
+const getObject = `-- name: GetObject :one
+SELECT id, store_id, ocfl_id, path, alg, spec FROM objects WHERE store_id = ? AND ocfl_id = ?
+`
+
+type GetObjectParams struct {
+	StoreID string
+	OcflID  string
+}
+
+func (q *Queries) GetObject(ctx context.Context, arg GetObjectParams) (Object, error) {
+	row := q.db.QueryRowContext(ctx, getObject, arg.StoreID, arg.OcflID)
+	var i Object
+	err := row.Scan(
+		&i.ID,
+		&i.StoreID,
+		&i.OcflID,
+		&i.Path,
+		&i.Alg,
+		&i.Spec,
+	)
+	return i, err
+}
+
+const getObjectContent = `-- name: GetObjectContent :one
+SELECT object_id, digest, paths, fixity, size FROM object_contents WHERE object_id = ? AND digest = ?
+`
+
+type GetObjectContentParams struct {
+	ObjectID int64
+	Digest   string
+}
+
+func (q *Queries) GetObjectContent(ctx context.Context, arg GetObjectContentParams) (ObjectContent, error) {
+	row := q.db.QueryRowContext(ctx, getObjectContent, arg.ObjectID, arg.Digest)
+	var i ObjectContent
+	err := row.Scan(
+		&i.ObjectID,
+		&i.Digest,
+		&i.Paths,
+		&i.Fixity,
+		&i.Size,
+	)
+	return i, err
+}
+
+const getObjectContents = `-- name: GetObjectContents :many
+SELECT object_id, digest, paths, fixity, size FROM object_contents WHERE object_id = ?
+`
+
+func (q *Queries) GetObjectContents(ctx context.Context, objectID int64) ([]ObjectContent, error) {
+	rows, err := q.db.QueryContext(ctx, getObjectContents, objectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ObjectContent
+	for rows.Next() {
+		var i ObjectContent
+		if err := rows.Scan(
+			&i.ObjectID,
+			&i.Digest,
+			&i.Paths,
+			&i.Fixity,
+			&i.Size,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUploader = `-- name: GetUploader :one
-SELECT id, user_id, algs, description, created_at from uploaders where id = ? LIMIT 1
+SELECT id, user_id, algs, description, created_at FROM uploaders WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) GetUploader(ctx context.Context, id string) (Uploader, error) {
@@ -131,7 +324,7 @@ func (q *Queries) GetUploader(ctx context.Context, id string) (Uploader, error) 
 }
 
 const getUploaderIDs = `-- name: GetUploaderIDs :many
-SELECT id from uploaders ORDER BY created_at
+SELECT id FROM uploaders ORDER BY created_at
 `
 
 func (q *Queries) GetUploaderIDs(ctx context.Context) ([]string, error) {
@@ -158,7 +351,7 @@ func (q *Queries) GetUploaderIDs(ctx context.Context) ([]string, error) {
 }
 
 const getUploads = `-- name: GetUploads :many
-SELECT id, size, uploader_id, digests from uploads WHERE uploader_id = ?
+SELECT id, size, uploader_id, digests FROM uploads WHERE uploader_id = ?
 `
 
 func (q *Queries) GetUploads(ctx context.Context, uploaderID string) ([]Upload, error) {

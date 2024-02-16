@@ -127,6 +127,8 @@ func AuthUserMiddleware(authFn AuthUserFunc) func(http.Handler) http.Handler {
 
 // Authorizer is an interface used by types that can perform authorziation
 // for requests.
+// TODO: simplify this interface by removing user arg from methods; get
+// the user from the ctx.
 type Authorizer interface {
 	// RootActionAllowed returns true if the user is allowed to perform action
 	// on the resource with the given root_id.

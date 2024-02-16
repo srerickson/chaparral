@@ -33,16 +33,22 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// AccessServiceGetObjectStateProcedure is the fully-qualified name of the AccessService's
-	// GetObjectState RPC.
-	AccessServiceGetObjectStateProcedure = "/chaparral.v1.AccessService/GetObjectState"
+	// AccessServiceGetObjectVersionProcedure is the fully-qualified name of the AccessService's
+	// GetObjectVersion RPC.
+	AccessServiceGetObjectVersionProcedure = "/chaparral.v1.AccessService/GetObjectVersion"
+	// AccessServiceGetObjectManifestProcedure is the fully-qualified name of the AccessService's
+	// GetObjectManifest RPC.
+	AccessServiceGetObjectManifestProcedure = "/chaparral.v1.AccessService/GetObjectManifest"
 )
 
 // AccessServiceClient is a client for the chaparral.v1.AccessService service.
 type AccessServiceClient interface {
-	// GetObjectState returns logical state, and other information for a given
-	// OCFL object version.
-	GetObjectState(context.Context, *connect_go.Request[v1.GetObjectStateRequest]) (*connect_go.Response[v1.GetObjectStateResponse], error)
+	// GetObjectVersion returns details about the logical state of an OCFL object
+	// version.
+	GetObjectVersion(context.Context, *connect_go.Request[v1.GetObjectVersionRequest]) (*connect_go.Response[v1.GetObjectVersionResponse], error)
+	// GetObjectManifest returns digests, sizes, and fixity information for all
+	// content associated with an object across all its versions.
+	GetObjectManifest(context.Context, *connect_go.Request[v1.GetObjectManifestRequest]) (*connect_go.Response[v1.GetObjectManifestResponse], error)
 }
 
 // NewAccessServiceClient constructs a client for the chaparral.v1.AccessService service. By
@@ -55,9 +61,14 @@ type AccessServiceClient interface {
 func NewAccessServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) AccessServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
 	return &accessServiceClient{
-		getObjectState: connect_go.NewClient[v1.GetObjectStateRequest, v1.GetObjectStateResponse](
+		getObjectVersion: connect_go.NewClient[v1.GetObjectVersionRequest, v1.GetObjectVersionResponse](
 			httpClient,
-			baseURL+AccessServiceGetObjectStateProcedure,
+			baseURL+AccessServiceGetObjectVersionProcedure,
+			opts...,
+		),
+		getObjectManifest: connect_go.NewClient[v1.GetObjectManifestRequest, v1.GetObjectManifestResponse](
+			httpClient,
+			baseURL+AccessServiceGetObjectManifestProcedure,
 			opts...,
 		),
 	}
@@ -65,19 +76,28 @@ func NewAccessServiceClient(httpClient connect_go.HTTPClient, baseURL string, op
 
 // accessServiceClient implements AccessServiceClient.
 type accessServiceClient struct {
-	getObjectState *connect_go.Client[v1.GetObjectStateRequest, v1.GetObjectStateResponse]
+	getObjectVersion  *connect_go.Client[v1.GetObjectVersionRequest, v1.GetObjectVersionResponse]
+	getObjectManifest *connect_go.Client[v1.GetObjectManifestRequest, v1.GetObjectManifestResponse]
 }
 
-// GetObjectState calls chaparral.v1.AccessService.GetObjectState.
-func (c *accessServiceClient) GetObjectState(ctx context.Context, req *connect_go.Request[v1.GetObjectStateRequest]) (*connect_go.Response[v1.GetObjectStateResponse], error) {
-	return c.getObjectState.CallUnary(ctx, req)
+// GetObjectVersion calls chaparral.v1.AccessService.GetObjectVersion.
+func (c *accessServiceClient) GetObjectVersion(ctx context.Context, req *connect_go.Request[v1.GetObjectVersionRequest]) (*connect_go.Response[v1.GetObjectVersionResponse], error) {
+	return c.getObjectVersion.CallUnary(ctx, req)
+}
+
+// GetObjectManifest calls chaparral.v1.AccessService.GetObjectManifest.
+func (c *accessServiceClient) GetObjectManifest(ctx context.Context, req *connect_go.Request[v1.GetObjectManifestRequest]) (*connect_go.Response[v1.GetObjectManifestResponse], error) {
+	return c.getObjectManifest.CallUnary(ctx, req)
 }
 
 // AccessServiceHandler is an implementation of the chaparral.v1.AccessService service.
 type AccessServiceHandler interface {
-	// GetObjectState returns logical state, and other information for a given
-	// OCFL object version.
-	GetObjectState(context.Context, *connect_go.Request[v1.GetObjectStateRequest]) (*connect_go.Response[v1.GetObjectStateResponse], error)
+	// GetObjectVersion returns details about the logical state of an OCFL object
+	// version.
+	GetObjectVersion(context.Context, *connect_go.Request[v1.GetObjectVersionRequest]) (*connect_go.Response[v1.GetObjectVersionResponse], error)
+	// GetObjectManifest returns digests, sizes, and fixity information for all
+	// content associated with an object across all its versions.
+	GetObjectManifest(context.Context, *connect_go.Request[v1.GetObjectManifestRequest]) (*connect_go.Response[v1.GetObjectManifestResponse], error)
 }
 
 // NewAccessServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -86,15 +106,22 @@ type AccessServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewAccessServiceHandler(svc AccessServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	accessServiceGetObjectStateHandler := connect_go.NewUnaryHandler(
-		AccessServiceGetObjectStateProcedure,
-		svc.GetObjectState,
+	accessServiceGetObjectVersionHandler := connect_go.NewUnaryHandler(
+		AccessServiceGetObjectVersionProcedure,
+		svc.GetObjectVersion,
+		opts...,
+	)
+	accessServiceGetObjectManifestHandler := connect_go.NewUnaryHandler(
+		AccessServiceGetObjectManifestProcedure,
+		svc.GetObjectManifest,
 		opts...,
 	)
 	return "/chaparral.v1.AccessService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case AccessServiceGetObjectStateProcedure:
-			accessServiceGetObjectStateHandler.ServeHTTP(w, r)
+		case AccessServiceGetObjectVersionProcedure:
+			accessServiceGetObjectVersionHandler.ServeHTTP(w, r)
+		case AccessServiceGetObjectManifestProcedure:
+			accessServiceGetObjectManifestHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -104,6 +131,10 @@ func NewAccessServiceHandler(svc AccessServiceHandler, opts ...connect_go.Handle
 // UnimplementedAccessServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedAccessServiceHandler struct{}
 
-func (UnimplementedAccessServiceHandler) GetObjectState(context.Context, *connect_go.Request[v1.GetObjectStateRequest]) (*connect_go.Response[v1.GetObjectStateResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.AccessService.GetObjectState is not implemented"))
+func (UnimplementedAccessServiceHandler) GetObjectVersion(context.Context, *connect_go.Request[v1.GetObjectVersionRequest]) (*connect_go.Response[v1.GetObjectVersionResponse], error) {
+	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.AccessService.GetObjectVersion is not implemented"))
+}
+
+func (UnimplementedAccessServiceHandler) GetObjectManifest(context.Context, *connect_go.Request[v1.GetObjectManifestRequest]) (*connect_go.Response[v1.GetObjectManifestResponse], error) {
+	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.AccessService.GetObjectManifest is not implemented"))
 }

@@ -90,12 +90,12 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 		req.Msg.User = &chaparralv1.User{Name: authUser.Name, Address: authUser.Email}
 	}
 	// prepare commit: handle different content source types
-	stage := ocfl.NewStage(commitAlg)
-	stage.State, err = PathMap(req.Msg.State).DigestMap()
+	state, err := ocfl.PathMap(req.Msg.State).DigestMapValid()
 	if err != nil {
 		err := fmt.Errorf("commit request includes invalid object state: %w", err)
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
+	stage := &ocfl.Stage{State: state, DigestAlgorithm: commitAlg}
 	switch src := req.Msg.ContentSource.(type) {
 	case *chaparralv1.CommitRequest_Uploader:
 		// commit content from uploader
@@ -123,12 +123,8 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
 		// apply the uploader's contents to the stage
-		stage.SetFS(upper.Root())
-		for _, up := range upper.Uploads() {
-			if err := stage.UnsafeAddPathAs(up.Name, "", up.Digests); err != nil {
-				return nil, connect.NewError(connect.CodeInternal, err)
-			}
-		}
+		stage.ContentSource = upper.ContentSource(commitAlg)
+		stage.FixitySource = upper.FixitySource(commitAlg)
 	case *chaparralv1.CommitRequest_Object:
 		// commit content from another object
 		logger.Debug("commit from existing object state",
@@ -145,20 +141,17 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 			err := fmt.Errorf("unknown storage root for source object state: %s", src.Object.StorageRootId)
 			return nil, connect.NewError(connect.CodeNotFound, err)
 		}
-		srcObj, err := srcStore.GetObjectState(ctx, src.Object.ObjectId, 0)
+		srcObj, err := srcStore.GetObjectManifest(ctx, src.Object.ObjectId)
 		if err != nil {
 			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("in source content: %w", err))
 		}
 		defer srcObj.Close()
-		if srcAlg := srcObj.Alg; srcAlg != commitAlg {
+		if srcAlg := srcObj.DigestAlgorithm; srcAlg != commitAlg {
 			err = fmt.Errorf("commit declares %s, but source object was created with %s", commitAlg, srcAlg)
 			return nil, connect.NewError(connect.CodeInvalidArgument, err)
 		}
-		stage.SetFS(srcObj.FS, srcObj.Path)
-		if err = stage.UnsafeSetManifestFixty(srcObj.Manifest, srcObj.Fixity); err != nil {
-			err = fmt.Errorf("building new stage manifest from source object: %w", err)
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
+		stage.ContentSource = srcObj
+		stage.FixitySource = srcObj
 	}
 	commitOpts := []ocflv1.CommitOption{
 		ocflv1.WithMessage(req.Msg.Message),
@@ -448,16 +441,4 @@ func (s *CommitService) AuthorizeInterceptor() connect.UnaryInterceptorFunc {
 func uploadPath(uploadID string) string {
 	params := url.Values{QueryUploaderID: {uploadID}}
 	return RouteUpload + "?" + params.Encode()
-}
-
-// TODO: put this in ocfl-go
-type PathMap map[string]string
-
-// DigestMap returns a new DigestMap with contets from pm.
-func (pm PathMap) DigestMap() (ocfl.DigestMap, error) {
-	dm := map[string][]string{}
-	for pth, dig := range pm {
-		dm[dig] = append(dm[dig], pth)
-	}
-	return ocfl.NewDigestMap(dm)
 }

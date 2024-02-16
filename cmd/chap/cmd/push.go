@@ -20,7 +20,7 @@ import (
 )
 
 // regexp for `.chaparral` directory
-var chaparralRE = regexp.MustCompile(`^(.*/)?\.` + chaparral + `$`)
+var chaparralRE = regexp.MustCompile(`^(.*/)?\.` + chaparralDir + `$`)
 
 var push = &pushCmd{
 	Command: &cobra.Command{
@@ -98,7 +98,7 @@ func (cmd *pushCmd) Run(ctx context.Context, cli *client.Client, conf *cfg.Confi
 }
 
 func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, commit *client.Commit, srcDir string, uploaderID string) error {
-	existing, err := cli.GetObjectState(ctx, commit.StorageRootID, commit.ObjectID, 0)
+	existing, err := cli.GetObjectVersion(ctx, commit.StorageRootID, commit.ObjectID, 0)
 	if err != nil && !client.IsNotFound(err) {
 		return fmt.Errorf("getting existing object state: %w", err)
 	}
@@ -140,7 +140,7 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, commit *c
 	if existing == nil {
 		changes, _ = delta.Diff(nil, commit.State)
 	} else {
-		changes, _ = delta.Diff(existing.State, commit.State)
+		changes, _ = delta.Diff(existing.State.PathMap(), commit.State)
 	}
 	fmt.Print(ui.PrettyDiff(changes))
 
@@ -199,7 +199,7 @@ func doPush(ctx context.Context, cli *client.Client, conf *cfg.Config, commit *c
 			return
 		}
 		fmt.Println("uploader", uploader.ID, "was not cleaned-up")
-		fmt.Println("use", chaparral, "uploader --delete", uploader.ID, "to clear it manually.")
+		fmt.Println("use", chaparralDir, "uploader --delete", uploader.ID, "to clear it manually.")
 	}()
 
 	// Run UIs: upload and commit
