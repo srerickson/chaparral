@@ -83,6 +83,15 @@ func main() {
 		loggerOptions.LogLevel = slog.LevelDebug
 	}
 	logger := httplog.NewLogger("chaparral", loggerOptions)
+	// sqlite3 for server state
+	db, err := chapdb.Open("sqlite3", conf.StateDB, true)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	defer db.Close()
+	chapDB := (*chapdb.SQLiteDB)(db)
+
 	backend, err := newBackend(conf.Backend)
 	if err != nil {
 		logger.Error(fmt.Sprintf("initializing backend: %v", err))
@@ -106,7 +115,7 @@ func main() {
 				Layout:      rootConfig.Init.Layout,
 			}
 		}
-		r := store.NewStorageRoot(rootConfig.ID, fsys, rootConfig.Path, init)
+		r := store.NewStorageRoot(rootConfig.ID, fsys, rootConfig.Path, init, chapDB)
 		roots = append(roots, r)
 		rootPaths = append(rootPaths, rootConfig.Path)
 	}
@@ -117,14 +126,6 @@ func main() {
 		logger.Error("error loading auth keyfile", "error", err.Error())
 		os.Exit(1)
 	}
-	// sqlite3 for server state
-	db, err := chapdb.Open("sqlite3", conf.StateDB, true)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	defer db.Close()
-	chapDB := (*chapdb.SQLiteDB)(db)
 
 	// upload manager is required for allowing uploads
 	var mgr *uploader.Manager

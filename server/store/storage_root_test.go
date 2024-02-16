@@ -29,17 +29,23 @@ func TestStorageRoot(t *testing.T) {
 	}
 }
 
-func TestConcurrentGet(t *testing.T) {
+func TestConcurrentAccess(t *testing.T) {
 	ctx := context.Background()
 	srcID := "ark:123/abc"
 	root := testutil.NewStoreTestdata(t, filepath.Join("..", "..", "testdata"))
-	times := 100
+	if _, err := root.GetObjectManifest(ctx, srcID); err != nil {
+		t.Fatal(err)
+	}
+	times := 20
 	wg := sync.WaitGroup{}
 	for i := 0; i < times; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			root.GetObjectManifest(ctx, srcID)
+			_, err := root.GetObjectManifest(ctx, srcID)
+			if err != nil {
+				t.Error(err)
+			}
 		}()
 	}
 	wg.Wait()

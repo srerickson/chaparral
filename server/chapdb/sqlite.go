@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/url"
 	"strings"
 
@@ -29,8 +28,10 @@ func Open(driver string, file string, migrate bool) (*sql.DB, error) {
 	switch driver {
 	case "sqlite3":
 		var err error
-		connStr := file + "?" + sqliteOpts.Encode()
-		slog.Debug("sqlite3 db", "file", connStr)
+		if file == ":memory:" {
+			sqliteOpts["cache"] = []string{"shared"}
+			sqliteOpts["mode"] = []string{"memory"}
+		}
 		db, err = sql.Open(driver, file+"?"+url.Values(sqliteOpts).Encode())
 		if err != nil {
 			return nil, err

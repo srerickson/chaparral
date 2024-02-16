@@ -33,8 +33,15 @@ type StorageRoot struct {
 	init    *StorageRootInitializer
 	once    sync.Once // initialize base one time
 
-	gettingObjects   map[string]chan getObjectResult
-	gettingObjectsMx sync.Mutex
+	cache ObjectCache
+
+	inflight   map[string]chan struct{}
+	inflightMx sync.Mutex
+}
+
+type ObjectCache interface {
+	SetObjectManifest(ctx context.Context, m *chaparral.ObjectManifest) error
+	GetObjectManifest(ctx context.Context, storeID string, objID string) (*chaparral.ObjectManifest, error)
 }
 
 // StorageRootInitializer is used to configure new storage roots that don't exist
@@ -44,14 +51,15 @@ type StorageRootInitializer struct {
 	//LayoutConfig map[string]any `json:"layout_config,omitempty"`
 }
 
-func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageRootInitializer) *StorageRoot {
+func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageRootInitializer, cache ObjectCache) *StorageRoot {
 	return &StorageRoot{
-		id:             id,
-		fs:             fsys,
-		path:           path,
-		init:           init,
-		locker:         lock.NewLocker(),
-		gettingObjects: map[string]chan getObjectResult{},
+		id:       id,
+		fs:       fsys,
+		path:     path,
+		init:     init,
+		locker:   lock.NewLocker(),
+		inflight: map[string]chan struct{}{},
+		cache:    cache,
 	}
 }
 
@@ -143,7 +151,7 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 	if err != nil {
 		return nil, err
 	}
-	obj, err := store.getObject(ctx, objectID)
+	obj, err := store.base.GetObject(ctx, objectID)
 	if err != nil {
 		unlock()
 		return nil, err
@@ -183,7 +191,7 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 }
 
 type ObjectManifest struct {
-	chaparral.ObjectManifest
+	*chaparral.ObjectManifest
 	close  func()
 	parent *StorageRoot
 }
@@ -210,11 +218,6 @@ func (obj *ObjectManifest) GetContent(digest string) (ocfl.FS, string) {
 }
 
 func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string) (*ObjectManifest, error) {
-	// check database for existing record
-	// if there's no record, see if it's already been requested.
-	// wait for the record or start a new request
-	//
-
 	if err := store.Ready(ctx); err != nil {
 		return nil, err
 	}
@@ -222,22 +225,56 @@ func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string
 	if err != nil {
 		return nil, err
 	}
-	obj, err := store.getObject(ctx, objectID)
+	man, err := store.getObjectManifest(ctx, objectID)
 	if err != nil {
 		unlock()
 		return nil, err
 	}
-	man := ObjectManifest{
-		parent: store,
-		close:  unlock,
-		ObjectManifest: chaparral.ObjectManifest{
-			StorageRootID:   store.id,
-			ObjectID:        obj.Inventory.ID,
-			Path:            obj.ObjectRoot.Path,
-			DigestAlgorithm: obj.Inventory.DigestAlgorithm,
-			Manifest:        chaparral.Manifest{},
-			Spec:            obj.Inventory.Type.String(),
-		},
+	return &ObjectManifest{
+		parent:         store,
+		close:          unlock,
+		ObjectManifest: man,
+	}, nil
+}
+
+func (store *StorageRoot) getObjectManifest(ctx context.Context, objectID string) (*chaparral.ObjectManifest, error) {
+	man, err := store.cache.GetObjectManifest(ctx, store.id, objectID)
+	if err == nil {
+		return man, nil
+	}
+	if err := store.syncObject(ctx, objectID); err != nil {
+		return nil, err
+	}
+	return store.cache.GetObjectManifest(ctx, store.id, objectID)
+}
+
+func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error {
+	wait, first := store.newInflight(objectID)
+	if !first {
+		<-wait // wait for result from first
+		return nil
+	}
+	defer func() {
+		store.inflightMx.Lock()
+		delete(store.inflight, objectID)
+		store.inflightMx.Unlock()
+		close(wait)
+	}()
+	// we are first.
+	// there isn't an existing request.
+	// do the request, send it to any
+	// others and clean up
+	obj, err := store.base.GetObject(ctx, objectID)
+	if err != nil {
+		return err
+	}
+	man := &chaparral.ObjectManifest{
+		StorageRootID:   store.id,
+		ObjectID:        obj.Inventory.ID,
+		Path:            obj.ObjectRoot.Path,
+		DigestAlgorithm: obj.Inventory.DigestAlgorithm,
+		Manifest:        chaparral.Manifest{},
+		Spec:            obj.Inventory.Type.String(),
 	}
 	for d, paths := range obj.Inventory.Manifest {
 		paths = slices.Clone(paths)
@@ -247,42 +284,20 @@ func (store *StorageRoot) GetObjectManifest(ctx context.Context, objectID string
 			Fixity: obj.Inventory.GetFixity(d),
 		}
 	}
-	return &man, nil
-}
-
-func (store *StorageRoot) getObject(ctx context.Context, objectID string) (*ocflv1.Object, error) {
-	ch, first := store.newGetObjectChan(objectID)
-	if !first {
-		r := <-ch // wait for result from first
-		return r.obj, r.err
+	if err := store.cache.SetObjectManifest(ctx, man); err != nil {
+		return fmt.Errorf("saving to storage root cache: %w", err)
 	}
-	// we are first.
-	// there isn't an existing request.
-	// do the request, send it to any
-	// others and clean up
-	var r getObjectResult
-	r.obj, r.err = store.base.GetObject(ctx, objectID)
-	ch <- r
-	close(ch)
-	store.gettingObjectsMx.Lock()
-	defer store.gettingObjectsMx.Unlock()
-	delete(store.gettingObjects, objectID)
-	return r.obj, r.err
+	return nil
 }
 
-type getObjectResult struct {
-	obj *ocflv1.Object
-	err error
-}
-
-func (store *StorageRoot) newGetObjectChan(objectID string) (chan getObjectResult, bool) {
-	store.gettingObjectsMx.Lock()
-	defer store.gettingObjectsMx.Unlock()
-	if val, ok := store.gettingObjects[objectID]; ok {
+func (store *StorageRoot) newInflight(objectID string) (chan struct{}, bool) {
+	store.inflightMx.Lock()
+	defer store.inflightMx.Unlock()
+	if val, ok := store.inflight[objectID]; ok {
 		return val, false
 	}
-	ch := make(chan getObjectResult, 1)
-	store.gettingObjects[objectID] = ch
+	ch := make(chan struct{})
+	store.inflight[objectID] = ch
 	return ch, true
 }
 

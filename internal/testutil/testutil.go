@@ -11,7 +11,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path"
-	"path/filepath"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -39,17 +38,15 @@ type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, store *sto
 func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{}))
 	authFn := server.DefaultAuthUserFunc(&testKey().PublicKey)
-	tmpData := t.TempDir()
 	opts := []server.Option{
 		server.WithLogger(logger),
 		server.WithAuthUserFunc(authFn),
 		server.WithAuthorizer(server.DefaultPermissions()),
 	}
 	t.Run("local-root", func(t *testing.T) {
-		db, err := chapdb.Open("sqlite3", filepath.Join(tmpData, "local-db.sqlite"), true)
+		db, err := chapdb.Open("sqlite3", ":memory:", true)
 		if err != nil {
-			logger.Error(err.Error())
-			os.Exit(1)
+			t.Fatal(err)
 		}
 		defer db.Close()
 		store := NewStoreTempDir(t)
@@ -67,10 +64,9 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	})
 	if WithS3() {
 		t.Run("s3-root", func(t *testing.T) {
-			db, err := chapdb.Open("sqlite3", filepath.Join(tmpData, "s3-db.sqlite"), true)
+			db, err := chapdb.Open("sqlite3", ":memory:", true)
 			if err != nil {
-				logger.Error(err.Error())
-				os.Exit(1)
+				t.Fatal(err)
 			}
 			defer db.Close()
 			root := NewStoreS3(t)
@@ -112,8 +108,12 @@ func NewStoreTestdata(t *testing.T, testdataPath string) *store.StorageRoot {
 	if err != nil {
 		t.Fatal(err)
 	}
+	db, err := chapdb.Open("sqlite3", ":memory:", true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dir := path.Join("storage-roots", "root-01")
-	root := store.NewStorageRoot("test", fsys, dir, nil)
+	root := store.NewStorageRoot("test", fsys, dir, nil, (*chapdb.SQLiteDB)(db))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,11 @@ func NewStoreTempDir(t *testing.T) *store.StorageRoot {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf)
+	db, err := chapdb.Open("sqlite3", ":memory:", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, (*chapdb.SQLiteDB)(db))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +146,11 @@ func NewStoreS3(t *testing.T) *store.StorageRoot {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf)
+	db, err := chapdb.Open("sqlite3", ":memory:", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, (*chapdb.SQLiteDB)(db))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
