@@ -29,31 +29,46 @@ func TestStorageRoot(t *testing.T) {
 	}
 }
 
-func TestConcurrentAccess(t *testing.T) {
+func TestGetObjectManifest(t *testing.T) {
 	ctx := context.Background()
 	srcID := "ark:123/abc"
 	root := testutil.NewStoreTestdata(t, filepath.Join("..", "..", "testdata"))
-	if _, err := root.GetObjectManifest(ctx, srcID); err != nil {
-		t.Fatal(err)
+	m, err := root.GetObjectManifest(ctx, srcID)
+	be.NilErr(t, err)
+	be.Equal(t, "1.0", m.Spec)
+	be.Equal(t, srcID, m.ObjectID)
+	be.Equal(t, root.ID(), m.StorageRootID)
+	be.Equal(t, "sha512", m.DigestAlgorithm)
+	be.Nonzero(t, m.Path)
+	be.True(t, len(m.Manifest) > 0)
+	for digest, info := range m.Manifest {
+		be.Nonzero(t, digest)
+		be.True(t, len(info.Paths) > 0)
+		// the testdata object has no fixity
 	}
-	times := 20
-	wg := sync.WaitGroup{}
-	for i := 0; i < times; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			m, err := root.GetObjectManifest(ctx, srcID)
-			if err != nil {
-				t.Error(err)
-			}
-			for _, info := range m.Manifest {
-				if len(info.Paths) < 1 {
-					t.Error("manifest has empty path entries")
+	m.Close()
+	t.Run("concurrent requests", func(t *testing.T) {
+		times := 20
+		wg := sync.WaitGroup{}
+		for i := 0; i < times; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				m, err := root.GetObjectManifest(ctx, srcID)
+				if err != nil {
+					t.Error(err)
 				}
-			}
-		}()
-	}
-	wg.Wait()
+				defer m.Close()
+				for _, info := range m.Manifest {
+					if len(info.Paths) < 1 {
+						t.Error("manifest has empty path entries")
+					}
+				}
+			}()
+		}
+		wg.Wait()
+
+	})
 }
 
 func testObjectLifecycle(t *testing.T, root *store.StorageRoot) {

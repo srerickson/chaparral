@@ -273,7 +273,7 @@ func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error
 		Path:            obj.Path,
 		DigestAlgorithm: obj.Inventory.DigestAlgorithm,
 		Manifest:        chaparral.Manifest{},
-		Spec:            obj.Inventory.Type.String(),
+		Spec:            obj.Inventory.Type.Spec.String(),
 	}
 	for d, paths := range obj.Inventory.Manifest {
 		paths = slices.Clone(paths)
