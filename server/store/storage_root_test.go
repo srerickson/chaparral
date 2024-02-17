@@ -36,7 +36,7 @@ func TestGetObjectManifest(t *testing.T) {
 	m, err := root.GetObjectManifest(ctx, srcID)
 	be.NilErr(t, err)
 	be.Equal(t, "1.0", m.Spec)
-	be.Equal(t, srcID, m.ObjectID)
+	be.Equal(t, srcID, m.ID)
 	be.Equal(t, root.ID(), m.StorageRootID)
 	be.Equal(t, "sha512", m.DigestAlgorithm)
 	be.Nonzero(t, m.Path)
@@ -133,7 +133,7 @@ func testObjectLifecycle(t *testing.T, root *store.StorageRoot) {
 	// close newObj and check Delete()
 	newVer.Close()
 	errs = goGroupErrors(2, func() error {
-		return root.DeleteObject(ctx, newVer.ObjectID)
+		return root.DeleteObject(ctx, newVer.ID)
 	})
 	// DeleteObject() should have succeeded only once
 	be.True(t, slices.Contains(errs, nil))
@@ -141,7 +141,7 @@ func testObjectLifecycle(t *testing.T, root *store.StorageRoot) {
 		return err != nil
 	}))
 	// object is gone
-	_, err = root.GetObjectVersion(ctx, srcVersion.ObjectID, 0)
+	_, err = root.GetObjectVersion(ctx, srcVersion.ID, 0)
 	be.True(t, errors.Is(err, fs.ErrNotExist))
 }
 

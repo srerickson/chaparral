@@ -167,8 +167,10 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 	}
 	objVersion := ObjectVersion{
 		ObjectVersion: chaparral.ObjectVersion{
-			ObjectID:        obj.Inventory.ID,
-			StorageRootID:   store.id,
+			ObjectRef: chaparral.ObjectRef{
+				StorageRootID: store.id,
+				ID:            obj.Inventory.ID,
+			},
 			DigestAlgorithm: obj.Inventory.DigestAlgorithm,
 			Spec:            obj.Inventory.Type.Spec.String(),
 			Head:            obj.Inventory.Head.Num(),
@@ -268,8 +270,10 @@ func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error
 		return err
 	}
 	man := &chaparral.ObjectManifest{
-		StorageRootID:   store.id,
-		ObjectID:        obj.Inventory.ID,
+		ObjectRef: chaparral.ObjectRef{
+			StorageRootID: store.id,
+			ID:            obj.Inventory.ID,
+		},
 		Path:            obj.Path,
 		DigestAlgorithm: obj.Inventory.DigestAlgorithm,
 		Manifest:        chaparral.Manifest{},

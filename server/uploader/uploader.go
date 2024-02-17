@@ -195,6 +195,10 @@ type Config struct {
 	Description string   `json:"description"`
 }
 
+func (c Config) UsesAlg(alg string) bool {
+	return slices.Contains(c.Algs, alg)
+}
+
 // Upload is an item in the Uploader manifest.
 type Upload struct {
 	// file name relative to uploader's root

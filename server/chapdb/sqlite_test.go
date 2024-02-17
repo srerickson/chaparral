@@ -57,8 +57,10 @@ func TestObject(t *testing.T) {
 	defer db.Close()
 	chapDB := (*chapdb.SQLiteDB)(db)
 	in := &chaparral.ObjectManifest{
-		StorageRootID:   "store-id",
-		ObjectID:        "object-id",
+		ObjectRef: chaparral.ObjectRef{
+			StorageRootID: "store-id",
+			ID:            "object-id",
+		},
 		DigestAlgorithm: "sha512",
 		Spec:            "1.0",
 		Path:            "a/place",
@@ -77,7 +79,7 @@ func TestObject(t *testing.T) {
 	be.NilErr(t, chapDB.SetObjectManifest(ctx, in))
 	in.Spec = "1.1"
 	be.NilErr(t, chapDB.SetObjectManifest(ctx, in))
-	out, err := chapDB.GetObjectManifest(ctx, in.StorageRootID, in.ObjectID)
+	out, err := chapDB.GetObjectManifest(ctx, in.StorageRootID, in.ID)
 	be.NilErr(t, err)
 	be.DeepEqual(t, in, out)
 }
