@@ -1,6 +1,6 @@
 # chaparral
 
-Chaparral is client/server application for storing and accessing versioned
+Chaparral is an API service for storing and accessing versioned
 datasets. It uses the [Oxford Common File Layout](https://ocfl.io) (OCFL)
 specification for storing, versioning, and validating content. File system
 and S3 backends are supported.
@@ -29,11 +29,6 @@ Chaparral's server API is defined using protocol buffers/gRPC and implemented
 using [connect-go](https://github.com/connectrpc/connect-go). It supports both
 gRPC and http/1.1 requests. Documentation is available through the [Buf schema
 registry](https://buf.build/srerickson/chaparral/docs/main:chaparral.v1). 
-
-## CLI
-
-This repo includes a command line client called [`chap`](cmd/chap), which supports push/pull
-operations for creating, updating, and deleting objects.
 
 ## About the name
 
