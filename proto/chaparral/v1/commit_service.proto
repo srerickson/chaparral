@@ -43,15 +43,21 @@ message CommitRequest{
     string message = 5;
     // state is a map of paths to digests using digest_algorithm
     map<string,string> state = 6;
-    // digest_algorithm is the id for the digest algorithm used in state.
+    // digest_algorithm is the id for the digest algorithm used in state. It 
+    // must be 'sha512' or 'sha256'
     string digest_algorithm = 7;
    // content source is used to set the location where new content for the
    // commit is stored.
-    oneof content_source{
-        // get new content from the uploader
-        UploaderSource uploader = 10;
-        // get new content from an existing object
-        ObjectSource object = 11;
+
+    repeated ContentSourceItem content_sources = 8;
+
+    message ContentSourceItem {
+        oneof item{
+            // get new content from the uploader
+            UploaderSource uploader = 1;
+            // get new content from an existing object
+            ObjectSource object = 2;
+        } 
     }
     message ObjectSource {
         string storage_root_id = 1;

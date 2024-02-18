@@ -62,7 +62,7 @@ func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Reque
 	defer obj.Close()
 	resp := &chaparralv1.GetObjectVersionResponse{
 		StorageRootId:   obj.StorageRootID,
-		ObjectId:        obj.ObjectID,
+		ObjectId:        obj.ID,
 		DigestAlgorithm: obj.DigestAlgorithm,
 		Version:         int32(obj.Version),
 		Head:            int32(obj.Head),
@@ -109,7 +109,7 @@ func (s *AccessService) GetObjectManifest(ctx context.Context, req *connect.Requ
 	defer obj.Close()
 	resp := &chaparralv1.GetObjectManifestResponse{
 		StorageRootId:   obj.StorageRootID,
-		ObjectId:        obj.ObjectID,
+		ObjectId:        obj.ID,
 		Path:            obj.Path,
 		DigestAlgorithm: obj.DigestAlgorithm,
 		Spec:            obj.Spec,

@@ -1,4 +1,4 @@
-package client_test
+package chaparral_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/carlmjohnson/be"
-	chap "github.com/srerickson/chaparral/client"
+	chap "github.com/srerickson/chaparral"
 	"github.com/srerickson/chaparral/internal/testutil"
 	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/ocfl-go"
@@ -38,7 +38,7 @@ func TestClientCommit(t *testing.T) {
 	testFn := func(t *testing.T, htc *http.Client, url string, store *store.StorageRoot) {
 		ctx := context.Background()
 		cli := chap.NewClient(htc, url)
-		fixture := filepath.Join("..", "testdata", "spec-ex-full")
+		fixture := filepath.Join("testdata", "spec-ex-full")
 		obj1ID, obj2ID := "object-01", "object-02"
 
 		t.Run("commit v1", func(t *testing.T) {
@@ -51,25 +51,28 @@ func TestClientCommit(t *testing.T) {
 			be.NilErr(t, err)
 			be.NilErr(t, cli.UploadStage(ctx, up, stage))
 			commit := &chap.Commit{
-				StorageRootID: store.ID(),
-				ObjectID:      obj1ID,
-				State:         stage.State,
-				Alg:           stage.Alg,
-				Version:       1,
+				To: chap.ObjectRef{
+					StorageRootID: store.ID(),
+					ID:            obj1ID,
+				},
+				State:   stage.State,
+				Alg:     stage.Alg,
+				Version: 1,
 				User: ocfl.User{
 					Name:    "A.B.",
 					Address: "ab@cd.ef",
 				},
-				Message: "test commit 1",
+				Message:        "test commit 1",
+				ContentSources: []any{up.UploaderRef},
 			}
-			be.NilErr(t, cli.CommitUploader(ctx, commit, up))
+			be.NilErr(t, cli.Commit(ctx, commit))
 			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.StorageRootID, state.StorageRootID)
-			be.Equal(t, commit.ObjectID, state.ObjectID)
+			be.Equal(t, commit.To.StorageRootID, state.StorageRootID)
+			be.Equal(t, commit.To.ID, state.ID)
 			be.Equal(t, commit.Version, state.Head)
 			be.Equal(t, commit.Version, state.Version)
-			be.DeepEqual(t, stage.State, state.State.PathMap()) // FIXME
+			be.DeepEqual(t, stage.State, state.State.PathMap())
 			be.Equal(t, commit.Alg, state.DigestAlgorithm)
 			be.Equal(t, commit.Message, state.Message)
 			if state.User != nil {
@@ -94,22 +97,25 @@ func TestClientCommit(t *testing.T) {
 			be.NilErr(t, err)
 			be.NilErr(t, cli.UploadStage(ctx, up, stage))
 			commit := &chap.Commit{
-				StorageRootID: store.ID(),
-				ObjectID:      obj1ID,
-				State:         stage.State,
-				Alg:           stage.Alg,
-				Version:       2,
+				To: chap.ObjectRef{
+					StorageRootID: store.ID(),
+					ID:            obj1ID,
+				},
+				State:   stage.State,
+				Alg:     stage.Alg,
+				Version: 2,
 				User: ocfl.User{
 					Name:    "C.D.",
 					Address: "ef@gh.i",
 				},
-				Message: "test commit 2",
+				Message:        "test commit 2",
+				ContentSources: []any{up.UploaderRef},
 			}
-			be.NilErr(t, cli.CommitUploader(ctx, commit, up))
+			be.NilErr(t, cli.Commit(ctx, commit))
 			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.StorageRootID, state.StorageRootID)
-			be.Equal(t, commit.ObjectID, state.ObjectID)
+			be.Equal(t, commit.To.StorageRootID, state.StorageRootID)
+			be.Equal(t, commit.To.ID, state.ID)
 			be.Equal(t, commit.Version, state.Head)
 			be.Equal(t, commit.Version, state.Version)
 			be.DeepEqual(t, stage.State, state.State.PathMap())
@@ -133,23 +139,28 @@ func TestClientCommit(t *testing.T) {
 			obj1, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
 			be.NilErr(t, err)
 			commit := &chap.Commit{
-				StorageRootID: store.ID(),
-				ObjectID:      obj2ID,
-				Version:       1,
-				Alg:           obj1.DigestAlgorithm,
-				State:         obj1.State.PathMap(),
+				To: chap.ObjectRef{
+					StorageRootID: store.ID(),
+					ID:            obj2ID,
+				},
+				Version: 1,
+				Alg:     obj1.DigestAlgorithm,
+				State:   obj1.State.PathMap(),
 				User: ocfl.User{
 					Name:    "C.D.",
 					Address: "ef@gh.i",
 				},
 				Message: "test fork",
+				ContentSources: []any{
+					chap.ObjectRef{StorageRootID: store.ID(), ID: obj1ID},
+				},
 			}
-			be.NilErr(t, cli.CommitFork(ctx, commit, store.ID(), obj1ID))
+			be.NilErr(t, cli.Commit(ctx, commit))
 			// result
 			obj2, err := cli.GetObjectVersion(ctx, store.ID(), obj2ID, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.StorageRootID, obj2.StorageRootID)
-			be.Equal(t, commit.ObjectID, obj2.ObjectID)
+			be.Equal(t, commit.To.StorageRootID, obj2.StorageRootID)
+			be.Equal(t, commit.To.ID, obj2.ID)
 			be.Equal(t, commit.Version, obj2.Head)
 			be.Equal(t, commit.Version, obj2.Version)
 			be.Equal(t, commit.Alg, obj2.DigestAlgorithm)

@@ -52,7 +52,7 @@ func TestCommitServiceCommit(t *testing.T) {
 			be.NilErr(t, err)
 			be.NilErr(t, upResp.Body.Close())
 			be.Equal(t, http.StatusOK, upResp.StatusCode)
-			var upload chaparral.UploadResult
+			var upload chaparral.Upload
 			be.NilErr(t, json.Unmarshal(respBody, &upload))
 			newState[name] = upload.Digests[alg]
 		}
@@ -63,10 +63,12 @@ func TestCommitServiceCommit(t *testing.T) {
 			Message:         "commit v1",
 			User:            &chapv1.User{Name: "Test"},
 			ObjectId:        "new-01",
-			ContentSource: &chapv1.CommitRequest_Uploader{
-				Uploader: &chapv1.CommitRequest_UploaderSource{
-					UploaderId: uploaderID,
-				},
+			ContentSources: []*chapv1.CommitRequest_ContentSourceItem{
+				{Item: &chapv1.CommitRequest_ContentSourceItem_Uploader{
+					Uploader: &chapv1.CommitRequest_UploaderSource{
+						UploaderId: uploaderID,
+					},
+				}},
 			},
 		}
 		_, err = chap.Commit(ctx, connect.NewRequest(commitReq))
@@ -136,12 +138,9 @@ func testCommitServiceUploader(t *testing.T, htc *http.Client, baseURL string, s
 			return fmt.Errorf("status code: %v", httpResponse.StatusCode)
 		}
 		// check result values
-		var uploadResult chaparral.UploadResult
+		var uploadResult chaparral.Upload
 		if err := json.NewDecoder(httpResponse.Body).Decode(&uploadResult); err != nil {
 			return err
-		}
-		if uploadResult.Err != "" {
-			return fmt.Errorf("error from upload request: %v", uploadResult.Err)
 		}
 		if size != uploadResult.Size {
 			return fmt.Errorf("upload size: got=%v, expect=%v", uploadResult.Size, size)

@@ -169,7 +169,7 @@ func (db *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.Object
 	qry := sqlite.New(db.sqlDB()).WithTx(tx)
 	dbObj, err := qry.CreateObject(ctx, sqlite.CreateObjectParams{
 		StoreID: obj.StorageRootID,
-		OcflID:  obj.ObjectID,
+		OcflID:  obj.ID,
 		Path:    obj.Path,
 		Spec:    obj.Spec,
 		Alg:     obj.DigestAlgorithm,
@@ -210,8 +210,10 @@ func (db *SQLiteDB) GetObjectManifest(ctx context.Context, storeID, objID string
 		return nil, err
 	}
 	obj := &chaparral.ObjectManifest{
-		ObjectID:        objDB.OcflID,
-		StorageRootID:   objDB.StoreID,
+		ObjectRef: chaparral.ObjectRef{
+			ID:            objDB.OcflID,
+			StorageRootID: objDB.StoreID,
+		},
 		Path:            objDB.Path,
 		DigestAlgorithm: objDB.Alg,
 		Spec:            objDB.Spec,

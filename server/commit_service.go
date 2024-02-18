@@ -89,64 +89,85 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 		err := fmt.Errorf("commit request includes invalid object state: %w", err)
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
-	stage := &ocfl.Stage{State: state, DigestAlgorithm: commitAlg}
-	switch src := req.Msg.ContentSource.(type) {
-	case *chaparralv1.CommitRequest_Uploader:
-		// commit content from uploader
-		uploaderID := src.Uploader.UploaderId
-		logger = logger.With(
-			"uploader_id", src.Uploader.UploaderId,
-		)
-		logger.Debug("commit from uploader")
-		if s.uploadMgr == nil {
-			err := errors.New("the server does not support uploads")
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-		upper, err := s.uploadMgr.GetUploader(ctx, uploaderID)
-		if err != nil {
-			err = fmt.Errorf("getting uploader %q: %w", src.Uploader.UploaderId, err)
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-		defer func() {
-			if err := upper.Close(commitCtx); err != nil {
-				logger.Error(err.Error())
-			}
-		}()
-		if !slices.Contains(upper.Config().Algs, commitAlg) {
-			err = fmt.Errorf("uploader doesn't provide digest algorithm used by commit: %s", commitAlg)
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-		// apply the uploader's contents to the stage
-		stage.ContentSource = upper.ContentSource(commitAlg)
-		stage.FixitySource = upper.FixitySource(commitAlg)
-	case *chaparralv1.CommitRequest_Object:
-		// commit content from another object
-		logger.Debug("commit from existing object state",
-			"src_store_id", src.Object.StorageRootId,
-			"src_object", src.Object.ObjectId,
-		)
-		if req.Msg.StorageRootId == src.Object.StorageRootId &&
-			req.Msg.ObjectId == src.Object.ObjectId {
-			err := errors.New("can't use self as object content source")
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-		srcStore, err := s.storageRoot(src.Object.StorageRootId)
-		if err != nil {
-			err := fmt.Errorf("unknown storage root for source object state: %s", src.Object.StorageRootId)
-			return nil, connect.NewError(connect.CodeNotFound, err)
-		}
-		srcObj, err := srcStore.GetObjectManifest(ctx, src.Object.ObjectId)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("in source content: %w", err))
-		}
-		defer srcObj.Close()
-		if srcAlg := srcObj.DigestAlgorithm; srcAlg != commitAlg {
-			err = fmt.Errorf("commit declares %s, but source object was created with %s", commitAlg, srcAlg)
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-		stage.ContentSource = srcObj
-		stage.FixitySource = srcObj
+	stage := &ocfl.Stage{
+		State:           state,
+		DigestAlgorithm: commitAlg,
 	}
+	for _, item := range req.Msg.ContentSources {
+		switch src := item.Item.(type) {
+		case *chaparralv1.CommitRequest_ContentSourceItem_Uploader:
+			// commit content from uploader
+			uploaderID := src.Uploader.UploaderId
+			logger = logger.With(
+				"uploader_id", src.Uploader.UploaderId,
+			)
+			logger.Debug("commit from uploader")
+			if s.uploadMgr == nil {
+				err := errors.New("the server does not support uploads")
+				return nil, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+			upper, err := s.uploadMgr.GetUploader(ctx, uploaderID)
+			if err != nil {
+				err = fmt.Errorf("getting uploader %q: %w", uploaderID, err)
+				return nil, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+			defer func() {
+				if err := upper.Close(commitCtx); err != nil {
+					logger.Error(err.Error())
+				}
+			}()
+			if !upper.Config().UsesAlg(commitAlg) {
+				err = fmt.Errorf("uploader doesn't provide digest algorithm used by commit: %s", commitAlg)
+				return nil, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+			// use Overlay to "merge" the content/fixity source in the base
+			// stage. It would be nice if ocfl.Stage included a method
+			// for adding new content sources like this.
+			if err := stage.Overlay(&ocfl.Stage{
+				DigestAlgorithm: commitAlg,
+				ContentSource:   upper.ContentSource(commitAlg),
+				FixitySource:    upper.FixitySource(commitAlg),
+			}); err != nil {
+				err := fmt.Errorf("error staging uploader %q", uploaderID)
+				return nil, connect.NewWireError(connect.CodeInvalidArgument, err)
+			}
+		case *chaparralv1.CommitRequest_ContentSourceItem_Object:
+			// commit content from another object
+			logger.Debug("commit from existing object state",
+				"src_store_id", src.Object.StorageRootId,
+				"src_object", src.Object.ObjectId,
+			)
+			if req.Msg.StorageRootId == src.Object.StorageRootId &&
+				req.Msg.ObjectId == src.Object.ObjectId {
+				err := errors.New("can't use self as object content source")
+				return nil, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+			srcStore, err := s.storageRoot(src.Object.StorageRootId)
+			if err != nil {
+				err := fmt.Errorf("unknown storage root for source object state: %s", src.Object.StorageRootId)
+				return nil, connect.NewError(connect.CodeNotFound, err)
+			}
+			srcObj, err := srcStore.GetObjectManifest(ctx, src.Object.ObjectId)
+			if err != nil {
+				return nil, connect.NewError(connect.CodeNotFound, fmt.Errorf("in source content: %w", err))
+			}
+			defer srcObj.Close()
+			if srcAlg := srcObj.DigestAlgorithm; srcAlg != commitAlg {
+				err = fmt.Errorf("commit declares %s, but source object was created with %s", commitAlg, srcAlg)
+				return nil, connect.NewError(connect.CodeInvalidArgument, err)
+			}
+			if err := stage.Overlay(&ocfl.Stage{
+				DigestAlgorithm: commitAlg,
+				ContentSource:   srcObj,
+				FixitySource:    srcObj,
+			}); err != nil {
+				err := fmt.Errorf("error staging source object %q", src.Object.ObjectId)
+				return nil, connect.NewWireError(connect.CodeInvalidArgument, err)
+			}
+		}
+
+	}
+
 	commitOpts := []ocflv1.CommitOption{
 		ocflv1.WithMessage(req.Msg.Message),
 		ocflv1.WithUser(*UserFromProto(req.Msg.User)),
@@ -343,26 +364,37 @@ func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := AuthUserFromCtx(ctx)
 	logger := LoggerFromCtx(ctx)
-	result := chap.UploadResult{}
+	result := chap.Upload{}
+	var errMsg string
 	defer func() {
-		if err := json.NewEncoder(w).Encode(&result); err != nil {
-			logger.Error(err.Error())
+		var respVal any
+		switch {
+		case errMsg != "":
+			respVal = struct {
+				Err string `json:"error"`
+			}{Err: errMsg}
+		default:
+			respVal = result
 		}
+		if err := json.NewEncoder(w).Encode(respVal); err != nil {
+			logger.Error("marshaling result", "err", err.Error())
+		}
+
 	}()
 	uploaderID := r.URL.Query().Get(chap.QueryUploaderID)
 	if s.auth != nil && !s.auth.ActionAllowed(ctx, &user, CommitAction) {
 		w.WriteHeader(http.StatusUnauthorized)
-		result.Err = "you don't have permission to upload files"
+		errMsg = "you don't have permission to upload files"
 		return
 	}
 	if s.uploadMgr == nil {
-		result.Err = "the storage root does not allow uploading"
+		errMsg = "the storage root does not allow uploading"
 		return
 	}
 	upper, err := s.uploadMgr.GetUploader(ctx, uploaderID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		result.Err = fmt.Sprintf("uploader %q: %s", uploaderID, err.Error())
+		errMsg = fmt.Sprintf("uploader %q: %s", uploaderID, err.Error())
 		return
 	}
 	defer func() {
@@ -374,8 +406,7 @@ func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	upload, err := upper.Write(ctx, r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		result.Err = err.Error()
-		logger.Error(result.Err)
+		errMsg = err.Error()
 		return
 	}
 	result.Digests = upload.Digests
@@ -403,9 +434,12 @@ func (s *CommitService) AuthorizeInterceptor() connect.UnaryInterceptorFunc {
 				if !ok {
 					break
 				}
-				// check permission to read source object (if commit uses one)
-				if obj, isObj := msg.ContentSource.(*chaparralv1.CommitRequest_Object); isObj {
-					ok = s.auth.RootActionAllowed(ctx, &user, ReadAction, obj.Object.StorageRootId)
+				for _, item := range msg.ContentSources {
+					// check permission to read source object (if commit uses one)
+					if obj, isObj := item.Item.(*chaparralv1.CommitRequest_ContentSourceItem_Object); isObj {
+						ok = s.auth.RootActionAllowed(ctx, &user, ReadAction, obj.Object.StorageRootId)
+					}
+
 				}
 			case *chaparralv1.DeleteObjectRequest:
 				ok = s.auth.RootActionAllowed(ctx, &user, DeleteAction, msg.StorageRootId)
