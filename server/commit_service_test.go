@@ -223,14 +223,14 @@ func nilErr(t *testing.T, err error) bool {
 	return true
 }
 
-func isEqual[T comparable](t *testing.T, want, got T) bool {
-	t.Helper()
-	if want != got {
-		t.Errorf("want: %v; got: %v", want, got)
-		return false
-	}
-	return true
-}
+// func isEqual[T comparable](t *testing.T, want, got T) bool {
+// 	t.Helper()
+// 	if want != got {
+// 		t.Errorf("want: %v; got: %v", want, got)
+// 		return false
+// 	}
+// 	return true
+// }
 
 func isTrue(t testing.TB, value bool) bool {
 	t.Helper()
