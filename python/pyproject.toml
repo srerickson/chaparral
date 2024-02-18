@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "chaparral"
+version = "0.1.0"
+description = ""
+authors = ["Seth R Erickson <sr.erickson@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+betterproto = "^1.2.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

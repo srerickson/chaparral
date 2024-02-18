@@ -10,5 +10,5 @@ plugins:
   - plugin: buf.build/bufbuild/connect-go
     out: gen
     opt: paths=source_relative
-  # - plugin: buf.build/community/danielgtaylor-betterproto:v1.2.5
-  #   out: python/gen
+  - plugin: buf.build/community/danielgtaylor-betterproto:v1.2.5
+    out: python/chaparral_py/gen

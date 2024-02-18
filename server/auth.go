@@ -118,6 +118,7 @@ func AuthUserMiddleware(authFn AuthUserFunc) func(http.Handler) http.Handler {
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 			newLogger := logger.With("user_roles", strings.Join(user.Roles, ","))
+			newLogger.Debug("setting user role for request")
 			newCtx := CtxWithAuthUser(CtxWithLogger(r.Context(), newLogger), user)
 			next.ServeHTTP(w, r.WithContext(newCtx))
 		}
