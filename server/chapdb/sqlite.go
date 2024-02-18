@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -160,13 +161,21 @@ func (db *SQLiteDB) CountUploaders(ctx context.Context) (int, error) {
 	return int(n), nil
 }
 
-func (db *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.ObjectManifest) error {
-	tx, err := db.sqlDB().BeginTx(ctx, nil)
+func (sqdb *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.ObjectManifest) (err error) {
+	var tx *sql.Tx
+	tx, err = sqdb.sqlDB().BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	qry := sqlite.New(db.sqlDB()).WithTx(tx)
+	defer func() {
+		if err == nil {
+			return
+		}
+		if rbErr := tx.Rollback(); rbErr != nil {
+			err = errors.Join(err, rbErr)
+		}
+	}()
+	qry := sqlite.New(sqdb.sqlDB()).WithTx(tx)
 	dbObj, err := qry.CreateObject(ctx, sqlite.CreateObjectParams{
 		StoreID: obj.StorageRootID,
 		OcflID:  obj.ID,
@@ -175,16 +184,17 @@ func (db *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.Object
 		Alg:     obj.DigestAlgorithm,
 	})
 	if err != nil {
-		return err
+		return
 	}
 	for digest, info := range obj.Manifest {
-		fixBytes, err := json.Marshal(info.Fixity)
+		var fixBytes, pathBytes []byte
+		fixBytes, err = json.Marshal(info.Fixity)
 		if err != nil {
-			return err
+			return
 		}
-		pathBytes, err := json.Marshal(info.Paths)
+		pathBytes, err = json.Marshal(info.Paths)
 		if err != nil {
-			return err
+			return
 		}
 		_, err = qry.CreateObjectContent(ctx, sqlite.CreateObjectContentParams{
 			ObjectID: dbObj.ID,
@@ -197,7 +207,8 @@ func (db *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.Object
 			return err
 		}
 	}
-	return tx.Commit()
+	err = tx.Commit()
+	return
 }
 
 func (db *SQLiteDB) GetObjectManifest(ctx context.Context, storeID, objID string) (*chaparral.ObjectManifest, error) {
@@ -237,25 +248,35 @@ func (db *SQLiteDB) GetObjectManifest(ctx context.Context, storeID, objID string
 	return obj, nil
 }
 
-func (db *SQLiteDB) DeleteObject(ctx context.Context, storeID, objectID string) error {
-	tx, err := db.sqlDB().BeginTx(ctx, nil)
+func (db *SQLiteDB) DeleteObject(ctx context.Context, storeID, objectID string) (err error) {
+	var tx *sql.Tx
+	tx, err = db.sqlDB().BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err == nil {
+			return
+		}
+		if rbErr := tx.Rollback(); rbErr != nil {
+			err = errors.Join(err, rbErr)
+		}
+	}()
 	qry := sqlite.New(db.sqlDB()).WithTx(tx)
-	if err := qry.DeleteObjectContents(ctx, sqlite.DeleteObjectContentsParams{
+	err = qry.DeleteObjectContents(ctx, sqlite.DeleteObjectContentsParams{
 		StoreID: storeID,
 		OcflID:  objectID,
-	}); err != nil {
-		return err
+	})
+	if err != nil {
+		return
 	}
-	if err := qry.DeleteObject(ctx, sqlite.DeleteObjectParams{
+	err = qry.DeleteObject(ctx, sqlite.DeleteObjectParams{
 		StoreID: storeID,
 		OcflID:  objectID,
-	}); err != nil {
-		return err
+	})
+	if err != nil {
+		return
 	}
-	return tx.Commit()
-
+	err = tx.Commit()
+	return
 }
