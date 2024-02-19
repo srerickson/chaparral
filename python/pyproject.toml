@@ -9,6 +9,8 @@ readme = "README.md"
 python = "^3.12"
 httpx = "^0.26.0"
 h2 = "^4.1.0"
+pydantic = "^2.6.1"
+aiofiles = "^23.2.1"
 
 
 [build-system]

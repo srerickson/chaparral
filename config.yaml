@@ -26,7 +26,8 @@ uploads: "uploads"
 # doesn't exist, it will be created using values in `init`. Additional storage
 # roots can be added, but they need to include a unique, non-empty `id` value.
 roots:
-- path: "ocfl-default" # path relative to CHAPARRAL_BACKEND
+- id: "main"
+  path: "ocfl-default" # path relative to CHAPARRAL_BACKEND
   init:
     # if the storage doesn't exist it will be created with 
     # these optiosn
