@@ -1,5 +1,5 @@
-from typing import Optional, List
-from httpx import AsyncClient, Response
+from typing import Optional, List, AsyncGenerator
+from httpx import AsyncClient
 from pydantic import BaseModel, Field
 
 
@@ -9,11 +9,12 @@ _get_manifest_rt = _access_svc_rt + "/GetObjectManifest"
 _get_version_rt = _access_svc_rt + "/GetObjectVersion"
 _get_blob_rt = _access_svc_rt + "/download"
 
+
 class FileInfo(BaseModel):
     paths: List[str]
     size: int = Field(default=0)
-    fixity: dict[str,str] = Field(default={})
-    
+    fixity: dict[str, str] = Field(default={})
+
 
 class User(BaseModel):
     name: str
@@ -62,7 +63,10 @@ class Client(AsyncClient):
         result.raise_for_status()
         return ObjectManifest(**result.json())
 
-    async def aget_version(self, root: str, obj: str, ver: int = 0) -> ObjectVersion:
+    async def aget_version(self,
+                           root: str,
+                           obj: str,
+                           ver: int = 0) -> ObjectVersion:
         body = {
             "storageRootId": root,
             "objectId": obj,
@@ -73,10 +77,11 @@ class Client(AsyncClient):
         return ObjectVersion(**result.json())
 
     async def aiter_bytes(self,
-                        root: str,
-                        obj: str,
-                        digest: str,
-                        chunk_size: Optional[int] = None):
+                          root: str,
+                          obj: str,
+                          digest: str,
+                          chunk_size: Optional[int] = None
+                          ) -> AsyncGenerator[bytes]:
         params = {
             "storage_root": root,
             "object_id": obj,
@@ -86,7 +91,6 @@ class Client(AsyncClient):
             response.raise_for_status()
             async for chunk in response.aiter_bytes(chunk_size):
                 yield chunk
-            print("done")
 
     # def get_version(self, obj: str, root: str = "", ver: int = 0):
     #     loop = asyncio.get_event_loop()
