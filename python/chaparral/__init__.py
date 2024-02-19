@@ -1,4 +1,4 @@
-from typing import Optional, List, AsyncGenerator
+from typing import Optional, List, AsyncIterator
 from httpx import AsyncClient
 from pydantic import BaseModel, Field
 
@@ -81,7 +81,7 @@ class Client(AsyncClient):
                           obj: str,
                           digest: str,
                           chunk_size: Optional[int] = None
-                          ) -> AsyncGenerator[bytes]:
+                          ) -> AsyncIterator[bytes]:
         params = {
             "storage_root": root,
             "object_id": obj,
