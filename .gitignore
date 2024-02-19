@@ -1,6 +1,10 @@
 .tool-versions
 .vscode
 
+__pycache__/
+*.pyc
+*.pyo
+
 testdata/minio/**
 !testdata/minio/.gitkeep
 
