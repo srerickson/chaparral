@@ -3,16 +3,16 @@ import hashlib
 from pathlib import Path
 
 
-def digest_dir(dir: Path, alg: str = "sha512") -> dict[str, List[str]]:
+def digest_dir(dir: Path, alg: str = "sha512") -> dict[str, List[Path]]:
 
     def __err(err):
         raise err
-    digests: dict[str, List[str]] = {}
+    digests: dict[str, List[Path]] = {}
     for parent, _, files in dir.walk(on_error=__err):
         for child in files:
             with (parent / child).open(mode='rb') as f:
                 d = hashlib.file_digest(f, alg).hexdigest()
-                n = Path(f.name).relative_to(dir).as_posix()
+                n = Path(f.name).relative_to(dir)
                 if d not in digests:
                     digests[d] = []
                 digests[d].append(n)

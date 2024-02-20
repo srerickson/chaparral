@@ -1,8 +1,9 @@
 import aiofiles
 from httpx import AsyncClient
 from pydantic import BaseModel, Field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional, List, AsyncIterator
+
 
 from .util import digest_dir
 
@@ -14,7 +15,7 @@ _get_blob_rt = _access_svc_rt + "/download"
 
 
 class FileInfo(BaseModel):
-    paths: List[str]
+    paths: List[PurePosixPath]
     size: int = Field(default=0)
     fixity: dict[str, str] = Field(default={})
 
@@ -103,14 +104,21 @@ class Client(AsyncClient):
         dstDir = Path(dst)
         dstDir.mkdir(exist_ok=True)
         version = await self.aget_version(root, obj)
-        existing = digest_dir(dst, version.digest_algorithm)
-        for digest, state in version.state.items():
+        existing = digest_dir(dstDir, version.digest_algorithm)
+        for digest, blob in version.state.items():
+
             if digest in existing:
-                print(digest + "exists locally")
+                locSrc = existing[digest][0]
+                for logicPath in blob.paths:
+                    print(locSrc, "->", (dstDir / logicPath))
                 continue
-            async for chunk in self.aiter_bytes(root, obj, digest):
-                for path in state.paths:
-                    newName = (dstDir / Path(dst))
-                    newName.parent.mkdir(exist_ok=True)
-                    async with aiofiles.open(newName, 'wb') as f:
-                        await f.write(chunk)
+
+            newName = (dstDir / blob.paths[0])
+            if newName.exists():
+                print("skipping " + str(newName))
+                continue
+            print("downloading " + str(newName))
+            newName.parent.mkdir(exist_ok=True)
+            async with aiofiles.open(newName, 'wb') as f:
+                async for chunk in self.aiter_bytes(root, obj, digest):
+                    await f.write(chunk)
