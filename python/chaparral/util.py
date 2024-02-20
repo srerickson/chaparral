@@ -1,20 +1,23 @@
+from typing import List
 import hashlib
-import os
 from pathlib import Path
 
 
-def digest_dir(name: str, alg: str = "sha512") -> dict[str,str]:
-    digests = {}
-    base = Path(name)
+def digest_dir(dir: Path, alg: str = "sha512") -> dict[str, List[str]]:
+
     def __err(err):
         raise err
-    for parent, _, files in Path(name).walk(on_error=__err):
+    digests: dict[str, List[str]] = {}
+    for parent, _, files in dir.walk(on_error=__err):
         for child in files:
             with (parent / child).open(mode='rb') as f:
-                digest = hashlib.file_digest(f, alg)
-                _name = Path(f.name).relative_to(name).as_posix()
-                digests[_name] = digest.hexdigest()
+                d = hashlib.file_digest(f, alg).hexdigest()
+                n = Path(f.name).relative_to(dir).as_posix()
+                if d not in digests:
+                    digests[d] = []
+                digests[d].append(n)
     return digests
+
 
 # async def process_files(directory):
 #     tasks = []

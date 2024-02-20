@@ -1,7 +1,10 @@
-from typing import Optional, List, AsyncIterator
+import aiofiles
 from httpx import AsyncClient
 from pydantic import BaseModel, Field
+from pathlib import Path
+from typing import Optional, List, AsyncIterator
 
+from .util import digest_dir
 
 # routes
 _access_svc_rt = "chaparral.v1.AccessService"
@@ -96,3 +99,18 @@ class Client(AsyncClient):
     #     loop = asyncio.get_event_loop()
     #     result = loop.run_until_complete(self.a_get_version(obj, root, ver))
     #     return result
+    async def apull(self, dst: str, root: str, obj: str, ver: int = 0):
+        dstDir = Path(dst)
+        dstDir.mkdir(exist_ok=True)
+        version = await self.aget_version(root, obj)
+        existing = digest_dir(dst, version.digest_algorithm)
+        for digest, state in version.state.items():
+            if digest in existing:
+                print(digest + "exists locally")
+                continue
+            async for chunk in self.aiter_bytes(root, obj, digest):
+                for path in state.paths:
+                    newName = (dstDir / Path(dst))
+                    newName.parent.mkdir(exist_ok=True)
+                    async with aiofiles.open(newName, 'wb') as f:
+                        await f.write(chunk)
