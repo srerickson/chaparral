@@ -6,11 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"net/url"
-	"os"
-	"slices"
 	"time"
 
 	"github.com/bufbuild/connect-go"
@@ -372,42 +369,42 @@ func (cli Client) Upload(ctx context.Context, uploadPath string, r io.Reader) (r
 	return
 }
 
-// UploadStage uploads content files in stage that are used in the stage's state. Content for digests
-// already present in the uploader's Digests list are not uploaded
-func (cli Client) UploadStage(ctx context.Context, up *Uploader, stage *Stage, excludeDigests ...string) error {
-	if !slices.Contains(up.DigestAlgorithms, stage.Alg) {
-		return fmt.Errorf("stage and uploader use different digest algorithms")
-	}
-	for _, digest := range stage.State {
-		if slices.Index(excludeDigests, digest) > 0 {
-			// explicitly ignored
-			continue
-		}
-		if slices.ContainsFunc(up.Uploads, func(existing Upload) bool {
-			return existing.Digests[stage.Alg] == digest
-		}) {
-			// already uploaded
-			continue
-		}
-		staged := stage.Content[digest]
-		if len(staged) == 0 {
-			// is that an error?
-			continue
-		}
-		var f fs.File
-		var err error
-		f, err = os.Open(staged[0])
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		_, err = cli.Upload(ctx, up.UploadPath, f)
-		if err != nil {
-			return fmt.Errorf("uploading %s: %w", staged[0], err)
-		}
-	}
-	return nil
-}
+// // UploadStage uploads content files in stage that are used in the stage's state. Content for digests
+// // already present in the uploader's Digests list are not uploaded
+// func (cli Client) UploadStage(ctx context.Context, up *Uploader, stage *Stage, excludeDigests ...string) error {
+// 	if !slices.Contains(up.DigestAlgorithms, stage.Alg) {
+// 		return fmt.Errorf("stage and uploader use different digest algorithms")
+// 	}
+// 	for _, digest := range stage.State {
+// 		if slices.Index(excludeDigests, digest) > 0 {
+// 			// explicitly ignored
+// 			continue
+// 		}
+// 		if slices.ContainsFunc(up.Uploads, func(existing Upload) bool {
+// 			return existing.Digests[stage.Alg] == digest
+// 		}) {
+// 			// already uploaded
+// 			continue
+// 		}
+// 		staged := stage.Content[digest]
+// 		if len(staged) == 0 {
+// 			// is that an error?
+// 			continue
+// 		}
+// 		var f fs.File
+// 		var err error
+// 		f, err = os.Open(staged[0])
+// 		if err != nil {
+// 			return err
+// 		}
+// 		defer f.Close()
+// 		_, err = cli.Upload(ctx, up.UploadPath, f)
+// 		if err != nil {
+// 			return fmt.Errorf("uploading %s: %w", staged[0], err)
+// 		}
+// 	}
+// 	return nil
+// }
 
 func IsNotFound(err error) bool {
 	var connErr *connect.Error

@@ -40,23 +40,23 @@ func TestClientCommit(t *testing.T) {
 		cli := chap.NewClient(htc, url)
 		fixture := filepath.Join("testdata", "spec-ex-full")
 		obj1ID, obj2ID := "object-01", "object-02"
+		alg := ocfl.SHA256
 
 		t.Run("commit v1", func(t *testing.T) {
-			up, err := cli.NewUploader(ctx, []string{ocfl.SHA256}, "test v1")
+			up, err := cli.NewUploader(ctx, []string{alg}, "test v1")
 			be.NilErr(t, err)
 			defer func() {
 				be.NilErr(t, cli.DeleteUploader(ctx, up.ID))
 			}()
-			stage, err := chap.NewStage(ocfl.SHA256, chap.AddDir(filepath.Join(fixture, "v1")))
+			state, err := testutil.UploadDir(cli, up, filepath.Join(fixture, "v1"), ocfl.SHA256)
 			be.NilErr(t, err)
-			be.NilErr(t, cli.UploadStage(ctx, up, stage))
 			commit := &chap.Commit{
 				To: chap.ObjectRef{
 					StorageRootID: store.ID(),
 					ID:            obj1ID,
 				},
-				State:   stage.State,
-				Alg:     stage.Alg,
+				State:   state,
+				Alg:     alg,
 				Version: 1,
 				User: ocfl.User{
 					Name:    "A.B.",
@@ -66,19 +66,19 @@ func TestClientCommit(t *testing.T) {
 				ContentSources: []any{up.UploaderRef},
 			}
 			be.NilErr(t, cli.Commit(ctx, commit))
-			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
+			ver, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.To.StorageRootID, state.StorageRootID)
-			be.Equal(t, commit.To.ID, state.ID)
-			be.Equal(t, commit.Version, state.Head)
-			be.Equal(t, commit.Version, state.Version)
-			be.DeepEqual(t, stage.State, state.State.PathMap())
-			be.Equal(t, commit.Alg, state.DigestAlgorithm)
-			be.Equal(t, commit.Message, state.Message)
-			if state.User != nil {
-				be.DeepEqual(t, commit.User, *state.User)
+			be.Equal(t, commit.To.StorageRootID, ver.StorageRootID)
+			be.Equal(t, commit.To.ID, ver.ID)
+			be.Equal(t, commit.Version, ver.Head)
+			be.Equal(t, commit.Version, ver.Version)
+			be.DeepEqual(t, state, ver.State.PathMap())
+			be.Equal(t, commit.Alg, ver.DigestAlgorithm)
+			be.Equal(t, commit.Message, ver.Message)
+			if ver.User != nil {
+				be.DeepEqual(t, commit.User, *ver.User)
 			}
-			for digest := range state.State {
+			for digest := range ver.State {
 				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
@@ -93,16 +93,15 @@ func TestClientCommit(t *testing.T) {
 			defer func() {
 				be.NilErr(t, cli.DeleteUploader(ctx, up.ID))
 			}()
-			stage, err := chap.NewStage(ocfl.SHA256, chap.AddDir(filepath.Join(fixture, "v2")))
+			stage, err := testutil.UploadDir(cli, up, filepath.Join(fixture, "v2"), alg)
 			be.NilErr(t, err)
-			be.NilErr(t, cli.UploadStage(ctx, up, stage))
 			commit := &chap.Commit{
 				To: chap.ObjectRef{
 					StorageRootID: store.ID(),
 					ID:            obj1ID,
 				},
-				State:   stage.State,
-				Alg:     stage.Alg,
+				State:   stage,
+				Alg:     alg,
 				Version: 2,
 				User: ocfl.User{
 					Name:    "C.D.",
@@ -112,19 +111,19 @@ func TestClientCommit(t *testing.T) {
 				ContentSources: []any{up.UploaderRef},
 			}
 			be.NilErr(t, cli.Commit(ctx, commit))
-			state, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
+			ver, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
 			be.NilErr(t, err)
-			be.Equal(t, commit.To.StorageRootID, state.StorageRootID)
-			be.Equal(t, commit.To.ID, state.ID)
-			be.Equal(t, commit.Version, state.Head)
-			be.Equal(t, commit.Version, state.Version)
-			be.DeepEqual(t, stage.State, state.State.PathMap())
-			be.Equal(t, commit.Alg, state.DigestAlgorithm)
-			be.Equal(t, commit.Message, state.Message)
-			if state.User != nil {
-				be.DeepEqual(t, commit.User, *state.User)
+			be.Equal(t, commit.To.StorageRootID, ver.StorageRootID)
+			be.Equal(t, commit.To.ID, ver.ID)
+			be.Equal(t, commit.Version, ver.Head)
+			be.Equal(t, commit.Version, ver.Version)
+			be.DeepEqual(t, stage, ver.State.PathMap())
+			be.Equal(t, commit.Alg, ver.DigestAlgorithm)
+			be.Equal(t, commit.Message, ver.Message)
+			if ver.User != nil {
+				be.DeepEqual(t, commit.User, *ver.User)
 			}
-			for digest := range state.State {
+			for digest := range ver.State {
 				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest, "")
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
