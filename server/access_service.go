@@ -27,7 +27,7 @@ func (s *AccessService) Handler() (string, http.Handler) {
 	// are handled in the hander functions.
 	route, handle := chaparralv1connect.NewAccessServiceHandler(s)
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == chap.RouteDownload && r.Method == http.MethodGet {
+		if r.URL.Path == chap.RouteDownload && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
 			s.DownloadHandler(w, r)
 			return
 		}
@@ -139,10 +139,15 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 			chap.QueryStorageRoot, storeID,
 			chap.QueryObjectID, objectID,
 			chap.QueryDigest, digest,
-		)
+			chap.QueryContentPath, contentPath)
 	)
 	defer func() {
 		if err != nil {
+			pathErr := &fs.PathError{}
+			if errors.As(err, &pathErr) && strings.HasSuffix(pathErr.Path, contentPath) {
+				// only report path relative to the storage root FS
+				pathErr.Path = contentPath
+			}
 			fmt.Fprint(w, err.Error())
 		}
 	}()
@@ -215,23 +220,32 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		logger.Error("during uploader: " + err.Error())
+		logger.Error("during download: " + err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			logger.Error("closing file: %w", closeErr)
+		}
+	}()
+	info, err := f.Stat()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if info.IsDir() {
+		err = errors.New("path is a directory")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if info != nil {
+		w.Header().Add("Content-Length", fmt.Sprintf("%d", info.Size()))
+	}
+	if r.Method == http.MethodHead {
+		return
+	}
 	if _, err = io.Copy(w, f); err != nil {
-		pathErr := &fs.PathError{}
-		if errors.As(err, &pathErr) && strings.HasSuffix(pathErr.Path, fullPath) {
-			// only report path relative to the storage root FS
-			pathErr.Path = fullPath
-		}
-		if strings.HasSuffix(err.Error(), "is a directory") {
-			// error triggered when reading a file descriptor for a directory
-			// from local filesystem. This message may be os-specific.
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
 		logger.Error(err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		return

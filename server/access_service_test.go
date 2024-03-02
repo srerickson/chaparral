@@ -21,9 +21,16 @@ import (
 	"github.com/srerickson/ocfl-go/ocflv1"
 )
 
+// digest from testdata manifest
+const (
+	testDigest    = "43a43fe8a8a082d3b5343dfaf2fd0c8b8e370675b1f376e92e9994612c33ea255b11298269d72f797399ebb94edeefe53df243643676548f584fb8603ca53a0f"
+	contentLength = 20
+)
+
 var _ chaparralv1connect.AccessServiceHandler = (*server.AccessService)(nil)
 
 func TestAccessServiceHandler(t *testing.T) {
+	ctx := context.Background()
 	testdataDir := filepath.Join("..", "testdata")
 	storePath := path.Join("storage-roots", "root-01")
 	objectID := "ark:123/abc"
@@ -35,7 +42,6 @@ func TestAccessServiceHandler(t *testing.T) {
 	httpClient := srv.Client()
 
 	// load fixture for comparison
-	ctx := context.Background()
 	storeB, err := ocflv1.GetStore(ctx, ocfl.DirFS(testdataDir), storePath)
 	if err != nil {
 		t.Fatal("in test setup:", err)
@@ -45,9 +51,8 @@ func TestAccessServiceHandler(t *testing.T) {
 		t.Fatal("in test setup:", err)
 	}
 	expectState := obj.Inventory.Version(0).State
-	t.Run("GetObjectState()", func(t *testing.T) {
+	t.Run("get object version", func(t *testing.T) {
 		chap := chaparralv1connect.NewAccessServiceClient(httpClient, srv.URL)
-		ctx := context.Background()
 		req := connect.NewRequest(&chaparralv1.GetObjectVersionRequest{
 			StorageRootId: storeID,
 			ObjectId:      objectID,
@@ -71,34 +76,45 @@ func TestAccessServiceHandler(t *testing.T) {
 		}
 		u := srv.URL + chap.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
-		if err != nil {
-			t.Fatal("http client error:", err)
-		}
+		be.NilErr(t, err)
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
 			b, _ := io.ReadAll(resp.Body)
-			t.Log(string(b))
-			t.Fatalf("Get(%q): status=%d", u, resp.StatusCode)
+			t.Fatalf("status=%d, resp=%s", resp.StatusCode, string(b))
 		}
+		// fixture inventory.json size
+		be.Equal(t, 744, resp.ContentLength)
 	})
 
 	t.Run("download by digest", func(t *testing.T) {
 		vals := url.Values{
-			chap.QueryDigest:      {"43a43fe8a8a082d3b5343dfaf2fd0c8b8e370675b1f376e92e9994612c33ea255b11298269d72f797399ebb94edeefe53df243643676548f584fb8603ca53a0f"},
+			chap.QueryDigest:      {testDigest},
 			chap.QueryObjectID:    {objectID},
 			chap.QueryStorageRoot: {storeID},
 		}
 		u := srv.URL + chap.RouteDownload + "?" + vals.Encode()
 		resp, err := httpClient.Get(u)
-		if err != nil {
-			t.Fatal("http client error:", err)
-		}
+		be.NilErr(t, err)
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
 			b, _ := io.ReadAll(resp.Body)
-			t.Log(string(b))
-			t.Fatalf("Get(%q): status=%d", u, resp.StatusCode)
+			t.Fatalf("status=%d, resp=%s", resp.StatusCode, string(b))
 		}
+		be.Equal(t, contentLength, resp.ContentLength)
+	})
+
+	t.Run("head by digest", func(t *testing.T) {
+		vals := url.Values{
+			chap.QueryDigest:      {testDigest},
+			chap.QueryObjectID:    {objectID},
+			chap.QueryStorageRoot: {storeID},
+		}
+		u := srv.URL + chap.RouteDownload + "?" + vals.Encode()
+		resp, err := httpClient.Head(u)
+		be.NilErr(t, err)
+		defer resp.Body.Close()
+		be.Equal(t, 200, resp.StatusCode)
+		be.Equal(t, contentLength, resp.ContentLength)
 	})
 
 	t.Run("download dir", func(t *testing.T) {
