@@ -79,7 +79,7 @@ func TestClientCommit(t *testing.T) {
 				be.DeepEqual(t, commit.User, *ver.User)
 			}
 			for digest := range ver.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest, "")
+				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest)
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
@@ -124,7 +124,7 @@ func TestClientCommit(t *testing.T) {
 				be.DeepEqual(t, commit.User, *ver.User)
 			}
 			for digest := range ver.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest, "")
+				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest)
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
@@ -168,7 +168,7 @@ func TestClientCommit(t *testing.T) {
 				be.DeepEqual(t, commit.User, *obj2.User)
 			}
 			for digest := range obj2.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj2ID, digest, "")
+				f, err := cli.GetContent(ctx, store.ID(), obj2ID, digest)
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
