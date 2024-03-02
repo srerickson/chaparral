@@ -228,13 +228,17 @@ func (cli Client) GetObjectManifest(ctx context.Context, storeID string, objectI
 	return objectManifestFromProto(resp.Msg), nil
 }
 
+type Content struct {
+	io.ReadCloser
+	Size int64
+}
+
 // Download
-func (cli Client) GetContent(ctx context.Context, storeID, objectID, digest, contentPath string) (io.ReadCloser, error) {
+func (cli Client) GetContent(ctx context.Context, storeID, objectID, digest string) (*Content, error) {
 	u := cli.baseURL + RouteDownload
 	vals := url.Values{
 		QueryStorageRoot: {storeID},
 		QueryObjectID:    {objectID},
-		QueryContentPath: {contentPath},
 		QueryDigest:      {digest},
 	}
 	resp, err := cli.Client.Get(u + "?" + vals.Encode())
@@ -245,7 +249,31 @@ func (cli Client) GetContent(ctx context.Context, storeID, objectID, digest, con
 		msg, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("server response (%s): %s", resp.Status, msg)
 	}
-	return resp.Body, nil
+	return &Content{
+		ReadCloser: resp.Body,
+		Size:       resp.ContentLength,
+	}, nil
+}
+
+func (cli Client) GetContentPath(ctx context.Context, storeID, objectID, contentPath string) (*Content, error) {
+	u := cli.baseURL + RouteDownload
+	vals := url.Values{
+		QueryStorageRoot: {storeID},
+		QueryObjectID:    {objectID},
+		QueryContentPath: {contentPath},
+	}
+	resp, err := cli.Client.Get(u + "?" + vals.Encode())
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server response (%s): %s", resp.Status, msg)
+	}
+	return &Content{
+		ReadCloser: resp.Body,
+		Size:       resp.ContentLength,
+	}, nil
 }
 
 func (cli Client) DeleteObject(ctx context.Context, storeID string, objectID string) error {
