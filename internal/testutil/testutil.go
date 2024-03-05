@@ -41,7 +41,7 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	opts := []server.Option{
 		server.WithLogger(logger),
 		server.WithAuthUserFunc(authFn),
-		server.WithAuthorizer(server.DefaultPermissions()),
+		server.WithAuthorizer(server.DefaultPermissions("test")),
 	}
 	t.Run("local-root", func(t *testing.T) {
 		db, err := chapdb.Open("sqlite3", ":memory:", true)

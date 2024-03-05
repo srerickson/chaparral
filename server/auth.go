@@ -21,7 +21,6 @@ const (
 	ActionReadObject   = "read_object"
 	ActionCommitObject = "commit_object"
 	ActionDeleteObject = "delete_object"
-	ActionUpload       = "upload_files"
 	// ActionAdminister   = "administer"
 
 	rolePrefix = "chaparral"
@@ -35,6 +34,8 @@ const (
 	RoleMember  = rolePrefix + ":member"
 	RoleManager = rolePrefix + ":manager"
 	RoleAdmin   = rolePrefix + ":admin"
+
+	permSep = "::"
 )
 
 // var pkenv = strings.ToUpper(rolePrefix) + "_JWK"
@@ -134,17 +135,18 @@ type Authorizer interface {
 	Allowed(ctx context.Context, action string, resources string) bool
 }
 
-// Permissions is a map of roles to permissions. It implements the Authorizer
+// Roles is a map of role names to RolePermissions. It implements the Authorizer
 // interface.
-type Permissions map[string]Permission
+type Roles map[string]RolePermissions
 
-// RootActionAllowed returns true if the user has a role with a permission
-// allowing the action on the resource with the given group and root ids.
-func (p Permissions) Allowed(ctx context.Context, action string, resource string) bool {
+// Allowed returns true if the user associated with the context has a role with a permission
+// allowing the action on the resource. If resource is '*', Allowed returns true if
+// the if the action is allowed for any resource.
+func (r Roles) Allowed(ctx context.Context, action string, resource string) bool {
 	user := AuthUserFromCtx(ctx)
 	roles := append(user.Roles, RoleDefault)
-	return slices.ContainsFunc(roles, func(r string) bool {
-		perm, ok := p[r]
+	return slices.ContainsFunc(roles, func(role string) bool {
+		perm, ok := r[role]
 		if !ok {
 			return false
 		}
@@ -164,12 +166,12 @@ func (p Permissions) Allowed(ctx context.Context, action string, resource string
 // 	})
 // }
 
-type Permission map[string][]string
+type RolePermissions map[string][]string
 
-func (p Permission) allow(action string, resource string) bool {
+func (p RolePermissions) allow(action string, resource string) bool {
 	for _, act := range []string{action, "*"} {
-		ok := slices.ContainsFunc(p[act], func(permitResource string) bool {
-			return resource == permitResource
+		ok := slices.ContainsFunc(p[act], func(okResource string) bool {
+			return resousrceMatch(resource, okResource)
 		})
 		if ok {
 			return true
@@ -178,24 +180,49 @@ func (p Permission) allow(action string, resource string) bool {
 	return false
 }
 
+func resousrceMatch(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	if a == "*" || b == "*" || a == b {
+		return true
+	}
+	if !strings.Contains(a, permSep) {
+		return false
+	}
+	aParts := strings.Split(a, permSep)
+	bParts := strings.Split(b, permSep)
+	if len(aParts) != len(bParts) {
+		return false
+	}
+	for i := range aParts {
+		if !resousrceMatch(aParts[i], bParts[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // DefaultPermissions returns the default server Permissions.
-func DefaultPermissions() Permissions {
-	return Permissions{
+// the "chaparral::member" role can access the default storage
+// root.
+func DefaultPermissions(defaultRoot string) Roles {
+	return Roles{
 		// No access for un-authenticated users
-		RoleDefault: Permission{},
+		RoleDefault: RolePermissions{},
 		// members can read objects in the default storage root
-		RoleMember: Permission{
-			ActionReadObject: []string{},
+		RoleMember: RolePermissions{
+			ActionReadObject: []string{defaultRoot + "::*"},
 		},
 		// managers can read, commit, and delete objects in the default storage
 		// root
-		RoleManager: Permission{
-			ActionReadObject:   []string{},
-			ActionCommitObject: []string{},
-			ActionDeleteObject: []string{},
+		RoleManager: RolePermissions{
+			ActionReadObject:   []string{"*"},
+			ActionCommitObject: []string{"*"},
+			ActionDeleteObject: []string{"*"},
 		},
 		// admins can do anything to objects in any storage root
-		RoleAdmin: Permission{
+		RoleAdmin: RolePermissions{
 			"*": []string{"*"},
 		},
 	}

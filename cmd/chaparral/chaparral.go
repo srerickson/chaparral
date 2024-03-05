@@ -145,7 +145,7 @@ func main() {
 		server.WithUploaderManager(mgr),
 		server.WithLogger(logger.Logger),
 		server.WithAuthUserFunc(server.DefaultAuthUserFunc(&authKey.PublicKey)),
-		server.WithAuthorizer(server.DefaultPermissions()),
+		server.WithAuthorizer(server.DefaultPermissions("main")),
 		server.WithMiddleware(
 			// log all requests
 			httplog.RequestLogger(logger),

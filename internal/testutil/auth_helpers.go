@@ -35,13 +35,13 @@ var (
 		Roles: []string{server.RoleAdmin}}
 
 	// canned permissions used in testing
-	AllowAll = server.Permissions{
+	AllowAll = server.Roles{
 		// anyone can do anythong
-		server.RoleDefault: server.Permission{
+		server.RoleDefault: server.RolePermissions{
 			"*": []string{"*"},
 		},
 	}
-	AllowNone = server.Permissions(nil)
+	AllowNone = server.Roles(nil)
 )
 
 func testKey() *rsa.PrivateKey {
