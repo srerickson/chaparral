@@ -22,23 +22,23 @@ var (
 		ID:    "test-member",
 		Email: "test-member@testing.com",
 		Name:  "Test Member",
-		Roles: []string{server.MemberRole}}
+		Roles: []string{server.RoleMember}}
 	ManagerUser = server.AuthUser{
 		ID:    "test-manager",
 		Email: "test-manager@testing.com",
 		Name:  "Test Manager",
-		Roles: []string{server.ManagerRole}}
+		Roles: []string{server.RoleManager}}
 	AdminUser = server.AuthUser{
 		ID:    "test-admin",
 		Email: "test-admin@testing.com",
 		Name:  "Test Admin",
-		Roles: []string{server.AdminRole}}
+		Roles: []string{server.RoleAdmin}}
 
 	// canned permissions used in testing
 	AllowAll = server.Permissions{
 		// anyone can do anythong
-		server.DefaultRole: []server.RolePermission{
-			{Actions: []string{"*"}, StorageRootID: "*"},
+		server.RoleDefault: server.Permission{
+			"*": []string{"*"},
 		},
 	}
 	AllowNone = server.Permissions(nil)
