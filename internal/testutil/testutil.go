@@ -25,6 +25,8 @@ import (
 	"github.com/srerickson/ocfl-go/extension"
 )
 
+const TestStoreID = "test"
+
 var (
 	s3Env     = "CHAPARRAL_TEST_S3"
 	storeConf = store.StorageRootInitializer{
@@ -33,7 +35,7 @@ var (
 	}
 )
 
-type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, store *store.StorageRoot)
+type ServiceTestFunc func(t *testing.T, cli *http.Client, url string)
 
 func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{}))
@@ -54,7 +56,7 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 		SetUserToken(testSrv.Client(), ManagerUser)
 		defer testSrv.Close()
 		for _, ts := range tests {
-			ts(t, testCli, testSrv.URL, store)
+			ts(t, testCli, testSrv.URL)
 		}
 	})
 	if !S3Enabled() {
@@ -72,7 +74,7 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 		SetUserToken(testSrv.Client(), ManagerUser)
 		defer testSrv.Close()
 		for _, ts := range tests {
-			ts(t, testCli, testSrv.URL, root)
+			ts(t, testCli, testSrv.URL)
 		}
 	})
 }
@@ -112,7 +114,7 @@ func NewStoreTestdata(t *testing.T, testdataPath string) *store.StorageRoot {
 		t.Fatal(err)
 	}
 	dir := path.Join("storage-roots", "root-01")
-	root := store.NewStorageRoot("test", fsys, dir, nil, TestDB(t))
+	root := store.NewStorageRoot(TestStoreID, fsys, dir, nil, TestDB(t))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +128,7 @@ func NewStoreTempDir(t *testing.T) *store.StorageRoot {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, TestDB(t))
+	root := store.NewStorageRoot(TestStoreID, fsys, "ocfl", &storeConf, TestDB(t))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +143,7 @@ func NewStoreS3(t *testing.T) *store.StorageRoot {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, TestDB(t))
+	root := store.NewStorageRoot(TestStoreID, fsys, "ocfl", &storeConf, TestDB(t))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}

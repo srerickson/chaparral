@@ -11,12 +11,11 @@ import (
 	"github.com/carlmjohnson/be"
 	chap "github.com/srerickson/chaparral"
 	"github.com/srerickson/chaparral/internal/testutil"
-	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/ocfl-go"
 )
 
 func TestClientNewUploader(t *testing.T) {
-	testFn := func(t *testing.T, htc *http.Client, url string, store *store.StorageRoot) {
+	testFn := func(t *testing.T, htc *http.Client, url string) {
 		ctx := context.Background()
 		cli := chap.NewClient(htc, url)
 		up, err := cli.NewUploader(ctx, []string{"sha256"}, "test")
@@ -35,7 +34,7 @@ func TestClientNewUploader(t *testing.T) {
 }
 
 func TestClientCommit(t *testing.T) {
-	testFn := func(t *testing.T, htc *http.Client, url string, store *store.StorageRoot) {
+	testFn := func(t *testing.T, htc *http.Client, url string) {
 		ctx := context.Background()
 		cli := chap.NewClient(htc, url)
 		fixture := filepath.Join("testdata", "spec-ex-full")
@@ -52,7 +51,7 @@ func TestClientCommit(t *testing.T) {
 			be.NilErr(t, err)
 			commit := &chap.Commit{
 				To: chap.ObjectRef{
-					StorageRootID: store.ID(),
+					StorageRootID: testutil.TestStoreID,
 					ID:            obj1ID,
 				},
 				State:   state,
@@ -66,7 +65,7 @@ func TestClientCommit(t *testing.T) {
 				ContentSources: []any{up.UploaderRef},
 			}
 			be.NilErr(t, cli.Commit(ctx, commit))
-			ver, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
+			ver, err := cli.GetObjectVersion(ctx, testutil.TestStoreID, obj1ID, 0)
 			be.NilErr(t, err)
 			be.Equal(t, commit.To.StorageRootID, ver.StorageRootID)
 			be.Equal(t, commit.To.ID, ver.ID)
@@ -79,7 +78,7 @@ func TestClientCommit(t *testing.T) {
 				be.DeepEqual(t, commit.User, *ver.User)
 			}
 			for digest := range ver.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest)
+				f, err := cli.GetContent(ctx, testutil.TestStoreID, obj1ID, digest)
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
@@ -97,7 +96,7 @@ func TestClientCommit(t *testing.T) {
 			be.NilErr(t, err)
 			commit := &chap.Commit{
 				To: chap.ObjectRef{
-					StorageRootID: store.ID(),
+					StorageRootID: testutil.TestStoreID,
 					ID:            obj1ID,
 				},
 				State:   stage,
@@ -111,7 +110,7 @@ func TestClientCommit(t *testing.T) {
 				ContentSources: []any{up.UploaderRef},
 			}
 			be.NilErr(t, cli.Commit(ctx, commit))
-			ver, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
+			ver, err := cli.GetObjectVersion(ctx, testutil.TestStoreID, obj1ID, 0)
 			be.NilErr(t, err)
 			be.Equal(t, commit.To.StorageRootID, ver.StorageRootID)
 			be.Equal(t, commit.To.ID, ver.ID)
@@ -124,7 +123,7 @@ func TestClientCommit(t *testing.T) {
 				be.DeepEqual(t, commit.User, *ver.User)
 			}
 			for digest := range ver.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj1ID, digest)
+				f, err := cli.GetContent(ctx, testutil.TestStoreID, obj1ID, digest)
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
@@ -135,11 +134,11 @@ func TestClientCommit(t *testing.T) {
 		t.Run("fork object", func(t *testing.T) {
 			// created obj2 as fork of obj1's last version
 			// expected
-			obj1, err := cli.GetObjectVersion(ctx, store.ID(), obj1ID, 0)
+			obj1, err := cli.GetObjectVersion(ctx, testutil.TestStoreID, obj1ID, 0)
 			be.NilErr(t, err)
 			commit := &chap.Commit{
 				To: chap.ObjectRef{
-					StorageRootID: store.ID(),
+					StorageRootID: testutil.TestStoreID,
 					ID:            obj2ID,
 				},
 				Version: 1,
@@ -151,12 +150,12 @@ func TestClientCommit(t *testing.T) {
 				},
 				Message: "test fork",
 				ContentSources: []any{
-					chap.ObjectRef{StorageRootID: store.ID(), ID: obj1ID},
+					chap.ObjectRef{StorageRootID: testutil.TestStoreID, ID: obj1ID},
 				},
 			}
 			be.NilErr(t, cli.Commit(ctx, commit))
 			// result
-			obj2, err := cli.GetObjectVersion(ctx, store.ID(), obj2ID, 0)
+			obj2, err := cli.GetObjectVersion(ctx, testutil.TestStoreID, obj2ID, 0)
 			be.NilErr(t, err)
 			be.Equal(t, commit.To.StorageRootID, obj2.StorageRootID)
 			be.Equal(t, commit.To.ID, obj2.ID)
@@ -168,7 +167,7 @@ func TestClientCommit(t *testing.T) {
 				be.DeepEqual(t, commit.User, *obj2.User)
 			}
 			for digest := range obj2.State {
-				f, err := cli.GetContent(ctx, store.ID(), obj2ID, digest)
+				f, err := cli.GetContent(ctx, testutil.TestStoreID, obj2ID, digest)
 				be.NilErr(t, err)
 				_, err = io.Copy(io.Discard, f)
 				be.NilErr(t, err)
