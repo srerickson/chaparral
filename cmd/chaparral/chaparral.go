@@ -34,25 +34,22 @@ import (
 
 var configFile = flag.String("c", "", "config file")
 
-type config struct {
-	Backend string `fig:"backend" default:"file://."`
-	Roots   []root `fig:"roots"`
-	Uploads string `fig:"uploads"`
-	Listen  string `fig:"listen"`
-	StateDB string `fig:"db" default:"chaparral.sqlite3"`
-	AuthPEM string `fig:"auth_pem" default:"chaparral.pem"`
-	TLSCert string `fig:"tls_cert"`
-	TLSKey  string `fig:"tls_key"`
-	Debug   bool   `fig:"debug"`
+type Config struct {
+	Backend string `json:"backend"`
+	Roots   []Root `json:"roots"`
+	Uploads string `json:"uploads"`
+	Listen  string `json:"listen"`
+	StateDB string `json:"db"`
+	AuthPEM string `json:"auth_pem"`
+	TLSCert string `json:"tls_cert"`
+	TLSKey  string `json:"tls_key"`
+	Debug   bool   `json:"debug"`
 }
 
-type root struct {
-	ID   string `fig:"id"`
-	Path string `fig:"path" validate:"required"`
-	Init *struct {
-		Layout      string `fig:"layout" default:"0002-flat-direct-storage-layout"`
-		Description string `fig:"description"`
-	} `fig:"init"`
+type Root struct {
+	ID   string                        `json:"id"`
+	Path string                        `json:"path"`
+	Init *store.StorageRootInitializer `json:"init"`
 }
 
 var loggerOptions = httplog.Options{
@@ -64,7 +61,7 @@ var loggerOptions = httplog.Options{
 
 func main() {
 	flag.Parse()
-	var conf config
+	var conf Config
 
 	figOpts := []fig.Option{
 		fig.UseEnv("CHAPARRAL"),
