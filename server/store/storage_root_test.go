@@ -21,7 +21,7 @@ func TestStorageRoot(t *testing.T) {
 	roots := []*store.StorageRoot{
 		testutil.NewStoreTempDir(t),
 	}
-	if testutil.WithS3() {
+	if testutil.S3Enabled() {
 		roots = append(roots, testutil.NewStoreS3(t))
 	}
 	for _, r := range roots {

@@ -37,56 +37,59 @@ type ServiceTestFunc func(t *testing.T, cli *http.Client, url string, store *sto
 
 func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{}))
-	authFn := server.DefaultAuthUserFunc(&testKey().PublicKey)
 	opts := []server.Option{
 		server.WithLogger(logger),
-		server.WithAuthUserFunc(authFn),
+		server.WithAuthUserFunc(AuthUserFunc()),
 		server.WithAuthorizer(server.DefaultRoles("test")),
 	}
 	t.Run("local-root", func(t *testing.T) {
-		db, err := chapdb.Open("sqlite3", ":memory:", true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer db.Close()
+		db := TestDB(t)
 		store := NewStoreTempDir(t)
-		mgr := uploader.NewManager(store.FS(), "uploads", (*chapdb.SQLiteDB)(db))
+		mgr := uploader.NewManager(store.FS(), "uploads", db)
 		mux := server.New(append(opts,
 			server.WithStorageRoots(store),
 			server.WithUploaderManager(mgr))...)
 		testSrv := httptest.NewTLSServer(mux)
 		testCli := testSrv.Client()
-		authorizeClient(testSrv.Client(), ManagerUser)
+		SetUserToken(testSrv.Client(), ManagerUser)
 		defer testSrv.Close()
 		for _, ts := range tests {
 			ts(t, testCli, testSrv.URL, store)
 		}
 	})
-	if WithS3() {
-		t.Run("s3-root", func(t *testing.T) {
-			db, err := chapdb.Open("sqlite3", ":memory:", true)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer db.Close()
-			root := NewStoreS3(t)
-			mgr := uploader.NewManager(root.FS(), "uploads", (*chapdb.SQLiteDB)(db))
-			mux := server.New(append(opts,
-				server.WithStorageRoots(root),
-				server.WithUploaderManager(mgr))...)
-			testSrv := httptest.NewTLSServer(mux)
-			testCli := testSrv.Client()
-			authorizeClient(testSrv.Client(), ManagerUser)
-			defer testSrv.Close()
-			for _, ts := range tests {
-				ts(t, testCli, testSrv.URL, root)
-			}
-		})
+	if !S3Enabled() {
+		return
 	}
+	t.Run("s3-root", func(t *testing.T) {
+		db := TestDB(t)
+		root := NewStoreS3(t)
+		mgr := uploader.NewManager(root.FS(), "uploads", db)
+		mux := server.New(append(opts,
+			server.WithStorageRoots(root),
+			server.WithUploaderManager(mgr))...)
+		testSrv := httptest.NewTLSServer(mux)
+		testCli := testSrv.Client()
+		SetUserToken(testSrv.Client(), ManagerUser)
+		defer testSrv.Close()
+		for _, ts := range tests {
+			ts(t, testCli, testSrv.URL, root)
+		}
+	})
+}
+
+func TestDB(t *testing.T) *chapdb.SQLiteDB {
+	db, err := chapdb.Open("sqlite3", ":memory:", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Close()
+	})
+	return (*chapdb.SQLiteDB)(db)
 }
 
 // Test using S3 backends
-func WithS3() bool { return os.Getenv(s3Env) != "" }
+func S3Enabled() bool { return os.Getenv(s3Env) != "" }
 
 func S3Session() (*s3.S3, error) {
 	sess, err := session.NewSession(&aws.Config{
@@ -108,12 +111,8 @@ func NewStoreTestdata(t *testing.T, testdataPath string) *store.StorageRoot {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := chapdb.Open("sqlite3", ":memory:", true)
-	if err != nil {
-		t.Fatal(err)
-	}
 	dir := path.Join("storage-roots", "root-01")
-	root := store.NewStorageRoot("test", fsys, dir, nil, (*chapdb.SQLiteDB)(db))
+	root := store.NewStorageRoot("test", fsys, dir, nil, TestDB(t))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -127,11 +126,7 @@ func NewStoreTempDir(t *testing.T) *store.StorageRoot {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := chapdb.Open("sqlite3", ":memory:", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, (*chapdb.SQLiteDB)(db))
+	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, TestDB(t))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -146,11 +141,7 @@ func NewStoreS3(t *testing.T) *store.StorageRoot {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := chapdb.Open("sqlite3", ":memory:", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, (*chapdb.SQLiteDB)(db))
+	root := store.NewStorageRoot("test", fsys, "ocfl", &storeConf, TestDB(t))
 	if err := root.Ready(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -243,4 +234,11 @@ func randName(prefix string) string {
 		panic("randName: " + err.Error())
 	}
 	return prefix + hex.EncodeToString(byt)
+}
+
+func Must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
 }

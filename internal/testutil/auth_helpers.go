@@ -17,6 +17,7 @@ var (
 	// key used for JWS signing/validation in tests
 	key *rsa.PrivateKey
 
+	AnonUser = server.AuthUser{}
 	// canned users for testing
 	MemberUser = server.AuthUser{
 		ID:    "test-member",
@@ -35,13 +36,16 @@ var (
 		Roles: []string{server.RoleAdmin}}
 
 	// canned permissions used in testing
-	AllowAll = server.Roles{
+	AuthorizeAll = server.Roles{
 		// anyone can do anythong
 		server.RoleDefault: server.RolePermissions{
 			"*": []string{"*"},
 		},
 	}
-	AllowNone = server.Roles(nil)
+	AuthorizeNone = server.Roles{}
+
+	// default
+	AuthorizeDefaults = server.DefaultRoles("test")
 )
 
 func testKey() *rsa.PrivateKey {
@@ -56,20 +60,26 @@ func testKey() *rsa.PrivateKey {
 	return key
 }
 
-// AuthorizeClient modifies the client to include a bearer token
+func AuthUserFunc() server.AuthUserFunc { return server.DefaultAuthUserFunc(&testKey().PublicKey) }
+
+// SetUserToken modifies the client to include a bearer token
 // for the given user. The token is signed with testKey.
-func authorizeClient(cli *http.Client, user server.AuthUser) {
+func SetUserToken(cli *http.Client, user server.AuthUser) {
 	if cli.Transport == nil {
 		cli.Transport = http.DefaultTransport
 	}
+	if existing, ok := cli.Transport.(*bearerTokenTransport); ok {
+		existing.Token = authUserToken(user)
+		return
+	}
 	cli.Transport = &bearerTokenTransport{
-		Token: AuthUserToken(user),
+		Token: authUserToken(user),
 		Base:  cli.Transport,
 	}
 }
 
-// AuthUserToken generates a token for the given user signed with the test kßey.
-func AuthUserToken(user server.AuthUser) string {
+// authUserToken generates a token for the given user signed with the test kßey.
+func authUserToken(user server.AuthUser) string {
 	key := testKey()
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, (&jose.SignerOptions{}).WithType("JWT"))
 	if err != nil {
