@@ -32,24 +32,30 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
+const healthCheck = "/alive"
+
 var configFile = flag.String("c", "", "config file")
 
-type Config struct {
-	Backend string `json:"backend"`
-	Roots   []Root `json:"roots"`
-	Uploads string `json:"uploads"`
-	Listen  string `json:"listen"`
-	StateDB string `json:"db"`
-	AuthPEM string `json:"auth_pem"`
-	TLSCert string `json:"tls_cert"`
-	TLSKey  string `json:"tls_key"`
-	Debug   bool   `json:"debug"`
+type config struct {
+	Backend string       `fig:"backend" default:"file://."`
+	Roots   []root       `fig:"roots"`
+	Uploads string       `fig:"uploads"`
+	Listen  string       `fig:"listen"`
+	StateDB string       `fig:"db" default:"chaparral.sqlite3"`
+	AuthPEM string       `fig:"auth_pem" default:"chaparral.pem"`
+	TLSCert string       `fig:"tls_cert"`
+	TLSKey  string       `fig:"tls_key"`
+	Debug   bool         `fig:"debug"`
+	Roles   server.Roles `fig:"roles"`
 }
 
-type Root struct {
-	ID   string                        `json:"id"`
-	Path string                        `json:"path"`
-	Init *store.StorageRootInitializer `json:"init"`
+type root struct {
+	ID   string `fig:"id"`
+	Path string `fig:"path" validate:"required"`
+	Init *struct {
+		Layout      string `fig:"layout" default:"0002-flat-direct-storage-layout"`
+		Description string `fig:"description"`
+	} `fig:"init"`
 }
 
 var loggerOptions = httplog.Options{
@@ -61,7 +67,7 @@ var loggerOptions = httplog.Options{
 
 func main() {
 	flag.Parse()
-	var conf Config
+	var conf config
 
 	figOpts := []fig.Option{
 		fig.UseEnv("CHAPARRAL"),
@@ -142,14 +148,14 @@ func main() {
 		server.WithUploaderManager(mgr),
 		server.WithLogger(logger.Logger),
 		server.WithAuthUserFunc(server.DefaultAuthUserFunc(&authKey.PublicKey)),
-		server.WithAuthorizer(server.DefaultPermissions("main")),
+		server.WithAuthorizer(server.DefaultRoles("main")),
 		server.WithMiddleware(
 			// log all requests
-			httplog.RequestLogger(logger),
+			httplog.RequestLogger(logger, []string{healthCheck}),
 		),
 	)
 	// healthcheck endpoint
-	mux.Handle("/alive", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle(healthCheck, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "OK")
 	}))
 	// grpc reflection endpoint

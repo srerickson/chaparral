@@ -431,18 +431,21 @@ func (s *CommitService) AuthorizeInterceptor() connect.UnaryInterceptorFunc {
 			var ok bool
 			switch msg := req.Any().(type) {
 			case *chaparralv1.CommitRequest:
-				ok = s.auth.Allowed(ctx, ActionCommitObject, msg.StorageRootId)
+				resource := AuthResource(msg.StorageRootId, msg.ObjectId)
+				ok = s.auth.Allowed(ctx, ActionCommitObject, resource)
 				if !ok {
 					break
 				}
 				for _, item := range msg.ContentSources {
 					// check permission to read source object (if commit uses one)
 					if obj, isObj := item.Item.(*chaparralv1.CommitRequest_ContentSourceItem_Object); isObj {
-						ok = s.auth.Allowed(ctx, ActionReadObject, obj.Object.StorageRootId)
+						resource := AuthResource(obj.Object.StorageRootId, obj.Object.ObjectId)
+						ok = s.auth.Allowed(ctx, ActionReadObject, resource)
 					}
 				}
 			case *chaparralv1.DeleteObjectRequest:
-				ok = s.auth.Allowed(ctx, ActionDeleteObject, msg.StorageRootId)
+				resource := AuthResource(msg.StorageRootId, msg.ObjectId)
+				ok = s.auth.Allowed(ctx, ActionDeleteObject, resource)
 			case *chaparralv1.NewUploaderRequest:
 				ok = s.auth.Allowed(ctx, ActionCommitObject, "*")
 			case *chaparralv1.DeleteUploaderRequest:

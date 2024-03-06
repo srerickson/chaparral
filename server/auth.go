@@ -139,6 +139,10 @@ type Authorizer interface {
 // interface.
 type Roles map[string]RolePermissions
 
+func AuthResource(parts ...string) string {
+	return strings.Join(parts, permSep)
+}
+
 // Allowed returns true if the user associated with the context has a role with a permission
 // allowing the action on the resource. If resource is '*', Allowed returns true if
 // the if the action is allowed for any resource.
@@ -153,18 +157,6 @@ func (r Roles) Allowed(ctx context.Context, action string, resource string) bool
 		return perm.allow(action, resource)
 	})
 }
-
-// func (p Permissions) ActionAllowed(_ context.Context, user *AuthUser, action string) bool {
-// 	roles := []string{DefaultRole}
-// 	if user != nil {
-// 		roles = append(roles, user.Roles...)
-// 	}
-// 	return slices.ContainsFunc(roles, func(r string) bool {
-// 		return slices.ContainsFunc(p[r], func(rp RolePermission) bool {
-// 			return rp.allowAction(action)
-// 		})
-// 	})
-// }
 
 type RolePermissions map[string][]string
 
@@ -203,23 +195,23 @@ func resousrceMatch(a, b string) bool {
 	return true
 }
 
-// DefaultPermissions returns the default server Permissions.
+// DefaultRoles returns the default server Permissions.
 // the "chaparral::member" role can access the default storage
 // root.
-func DefaultPermissions(defaultRoot string) Roles {
+func DefaultRoles(defaultRoot string) Roles {
 	return Roles{
 		// No access for un-authenticated users
 		RoleDefault: RolePermissions{},
 		// members can read objects in the default storage root
 		RoleMember: RolePermissions{
-			ActionReadObject: []string{defaultRoot + "::*"},
+			ActionReadObject: []string{AuthResource(defaultRoot, "*")},
 		},
 		// managers can read, commit, and delete objects in the default storage
 		// root
 		RoleManager: RolePermissions{
-			ActionReadObject:   []string{"*"},
-			ActionCommitObject: []string{"*"},
-			ActionDeleteObject: []string{"*"},
+			ActionReadObject:   []string{AuthResource(defaultRoot, "*")},
+			ActionCommitObject: []string{AuthResource(defaultRoot, "*")},
+			ActionDeleteObject: []string{AuthResource(defaultRoot, "*")},
 		},
 		// admins can do anything to objects in any storage root
 		RoleAdmin: RolePermissions{

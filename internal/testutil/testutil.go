@@ -41,7 +41,7 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	opts := []server.Option{
 		server.WithLogger(logger),
 		server.WithAuthUserFunc(authFn),
-		server.WithAuthorizer(server.DefaultPermissions("test")),
+		server.WithAuthorizer(server.DefaultRoles("test")),
 	}
 	t.Run("local-root", func(t *testing.T) {
 		db, err := chapdb.Open("sqlite3", ":memory:", true)
@@ -56,7 +56,7 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 			server.WithUploaderManager(mgr))...)
 		testSrv := httptest.NewTLSServer(mux)
 		testCli := testSrv.Client()
-		authorizeClient(testSrv.Client(), AdminUser)
+		authorizeClient(testSrv.Client(), ManagerUser)
 		defer testSrv.Close()
 		for _, ts := range tests {
 			ts(t, testCli, testSrv.URL, store)
@@ -76,7 +76,7 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 				server.WithUploaderManager(mgr))...)
 			testSrv := httptest.NewTLSServer(mux)
 			testCli := testSrv.Client()
-			authorizeClient(testSrv.Client(), AdminUser)
+			authorizeClient(testSrv.Client(), ManagerUser)
 			defer testSrv.Close()
 			for _, ts := range tests {
 				ts(t, testCli, testSrv.URL, root)

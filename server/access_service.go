@@ -42,7 +42,8 @@ func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Reque
 		chap.QueryObjectID, req.Msg.ObjectId,
 		"version", req.Msg.Version,
 	)
-	if s.auth != nil && !s.auth.Allowed(ctx, ActionReadObject, req.Msg.StorageRootId) {
+	authResource := AuthResource(req.Msg.StorageRootId, req.Msg.ObjectId)
+	if s.auth != nil && !s.auth.Allowed(ctx, ActionReadObject, authResource) {
 		err := errors.New("you don't have permission to read from the storage root")
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
@@ -88,7 +89,8 @@ func (s *AccessService) GetObjectManifest(ctx context.Context, req *connect.Requ
 		chap.QueryStorageRoot, req.Msg.StorageRootId,
 		chap.QueryObjectID, req.Msg.ObjectId,
 	)
-	if s.auth != nil && !s.auth.Allowed(ctx, ActionReadObject, req.Msg.StorageRootId) {
+	authResource := AuthResource(req.Msg.StorageRootId, req.Msg.ObjectId)
+	if s.auth != nil && !s.auth.Allowed(ctx, ActionReadObject, authResource) {
 		err := errors.New("you don't have permission to read from the storage root")
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
@@ -149,6 +151,11 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 			fmt.Fprint(w, err.Error())
 		}
 	}()
+	if objectID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		err = errors.New("malformed or missing object id")
+		return
+	}
 	if contentPath == "" && digest == "" {
 		err = errors.New("must provide 'content_path' or 'digest' query parameters")
 		w.WriteHeader(http.StatusBadRequest)
@@ -159,17 +166,12 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	if srv.auth != nil && !srv.auth.Allowed(ctx, ActionReadObject, storeID) {
+	authResource := AuthResource(storeID, objectID)
+	if srv.auth != nil && !srv.auth.Allowed(ctx, ActionReadObject, authResource) {
 		w.WriteHeader(http.StatusUnauthorized)
 		err = errors.New("you don't have permission to download from the storage root")
 		return
 	}
-	if objectID == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		err = errors.New("malformed or missing object id")
-		return
-	}
-
 	// make sure storage root's base is initialized
 	if err = root.Ready(ctx); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
