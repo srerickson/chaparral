@@ -4,7 +4,6 @@ package server
 
 import (
 	"context"
-	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,25 +20,9 @@ const (
 	ActionReadObject   = "read_object"
 	ActionCommitObject = "commit_object"
 	ActionDeleteObject = "delete_object"
-	// ActionAdminister   = "administer"
-
-	rolePrefix = "chaparral"
-
-	// built-in user roles
-
-	// RoleDefault can be used to assign permissions to all users, even
-	// un-authenticated ones. The default role is attached to users implicitly.
-	// It doesn't need to be included in the user's list of roles.
-	RoleDefault = rolePrefix + ":default"
-
-	RoleMember  = rolePrefix + ":member"
-	RoleManager = rolePrefix + ":manager"
-	RoleAdmin   = rolePrefix + ":admin"
 
 	permSep = "::"
 )
-
-// var pkenv = strings.ToUpper(rolePrefix) + "_JWK"
 
 type userCtxKey struct{}
 
@@ -73,9 +56,9 @@ type AuthToken struct {
 	User AuthUser `json:"chaparral"`
 }
 
-// DefaultAuthUserFunc returns an Authentication func that looks
-// for a signed JWT bearer token.
-func DefaultAuthUserFunc(pub *rsa.PublicKey) AuthUserFunc {
+// JWSAuthFunc returns an Authentication func that looks
+// for a jwt bearer token signed with the public key.
+func JWSAuthFunc(pubkey any) AuthUserFunc {
 	auth := func(r *http.Request) (user AuthUser, err error) {
 		authHeader := r.Header.Get("Authorization")
 		_, encToken, _ := strings.Cut(authHeader, " ")
@@ -88,7 +71,7 @@ func DefaultAuthUserFunc(pub *rsa.PublicKey) AuthUserFunc {
 			err = fmt.Errorf("parsing auth token: %w", err)
 			return
 		}
-		payload, err := sig.Verify(pub)
+		payload, err := sig.Verify(pubkey)
 		if err != nil {
 			err = fmt.Errorf("auth token signature verification failed: %w", err)
 			return
@@ -136,9 +119,13 @@ type Authorizer interface {
 	Allowed(ctx context.Context, action string, resources string) bool
 }
 
-// Roles is a map of role names to RolePermissions. It implements the Authorizer
+// RolePermissions is a map of role names to Permissions. It implements the Authorizer
 // interface.
-type Roles map[string]RolePermissions
+type RolePermissions struct {
+	// Default permissions that apply to all users and un-authenticated requests
+	Default Permissions            `json:"default"`
+	Roles   map[string]Permissions `json:"roles"`
+}
 
 func AuthResource(parts ...string) string {
 	return strings.Join(parts, permSep)
@@ -147,11 +134,13 @@ func AuthResource(parts ...string) string {
 // Allowed returns true if the user associated with the context has a role with a permission
 // allowing the action on the resource. If resource is '*', Allowed returns true if
 // the if the action is allowed for any resource.
-func (r Roles) Allowed(ctx context.Context, action string, resource string) bool {
+func (r RolePermissions) Allowed(ctx context.Context, action string, resource string) bool {
 	user := AuthUserFromCtx(ctx)
-	roles := append(user.Roles, RoleDefault)
-	return slices.ContainsFunc(roles, func(role string) bool {
-		perm, ok := r[role]
+	if r.Default.allow(action, resource) {
+		return true
+	}
+	return slices.ContainsFunc(user.Roles, func(role string) bool {
+		perm, ok := r.Roles[role]
 		if !ok {
 			return false
 		}
@@ -159,9 +148,10 @@ func (r Roles) Allowed(ctx context.Context, action string, resource string) bool
 	})
 }
 
-type RolePermissions map[string][]string
+// Permissions maps actions to resources for which the action is allowed.
+type Permissions map[string][]string
 
-func (p RolePermissions) allow(action string, resource string) bool {
+func (p Permissions) allow(action string, resource string) bool {
 	for _, act := range []string{action, "*"} {
 		ok := slices.ContainsFunc(p[act], func(okResource string) bool {
 			return resousrceMatch(resource, okResource)
@@ -194,29 +184,4 @@ func resousrceMatch(a, b string) bool {
 		}
 	}
 	return true
-}
-
-// DefaultRoles returns the default server Permissions.
-// the "chaparral::member" role can access the default storage
-// root.
-func DefaultRoles(defaultRoot string) Roles {
-	return Roles{
-		// No access for un-authenticated users
-		RoleDefault: RolePermissions{},
-		// members can read objects in the default storage root
-		RoleMember: RolePermissions{
-			ActionReadObject: []string{AuthResource(defaultRoot, "*")},
-		},
-		// managers can read, commit, and delete objects in the default storage
-		// root
-		RoleManager: RolePermissions{
-			ActionReadObject:   []string{AuthResource(defaultRoot, "*")},
-			ActionCommitObject: []string{AuthResource(defaultRoot, "*")},
-			ActionDeleteObject: []string{AuthResource(defaultRoot, "*")},
-		},
-		// admins can do anything to objects in any storage root
-		RoleAdmin: RolePermissions{
-			"*": []string{"*"},
-		},
-	}
 }

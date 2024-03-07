@@ -9,11 +9,11 @@ import (
 	"github.com/srerickson/chaparral/server"
 )
 
-var _ server.Authorizer = (server.Roles)(nil)
+var _ server.Authorizer = (*server.RolePermissions)(nil)
 
-func TestDefaultPermissions(t *testing.T) {
+func TestRolePermissions(t *testing.T) {
 	ctx := context.Background()
-	perms := server.DefaultRoles("main")
+	perms := testutil.DefaultRoles("main")
 
 	be.False(t, perms.Allowed(ctx, server.ActionReadObject, "*"))
 	be.False(t, perms.Allowed(ctx, server.ActionCommitObject, "*"))

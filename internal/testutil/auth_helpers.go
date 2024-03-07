@@ -13,6 +13,15 @@ import (
 	"github.com/srerickson/chaparral/server"
 )
 
+const (
+	issuer = "chaparral-test"
+
+	// roles used for testing
+	RoleMember  = issuer + ":member"
+	RoleManager = issuer + ":manager"
+	RoleAdmin   = issuer + ":admin"
+)
+
 var (
 	// key used for JWS signing/validation in tests
 	key *rsa.PrivateKey
@@ -23,30 +32,48 @@ var (
 		ID:    "test-member",
 		Email: "test-member@testing.com",
 		Name:  "Test Member",
-		Roles: []string{server.RoleMember}}
+		Roles: []string{RoleMember}}
 	ManagerUser = server.AuthUser{
 		ID:    "test-manager",
 		Email: "test-manager@testing.com",
 		Name:  "Test Manager",
-		Roles: []string{server.RoleManager}}
+		Roles: []string{RoleManager}}
 	AdminUser = server.AuthUser{
 		ID:    "test-admin",
 		Email: "test-admin@testing.com",
 		Name:  "Test Admin",
-		Roles: []string{server.RoleAdmin}}
+		Roles: []string{RoleAdmin}}
 
 	// canned permissions used in testing
-	AuthorizeAll = server.Roles{
-		// anyone can do anythong
-		server.RoleDefault: server.RolePermissions{
-			"*": []string{"*"},
-		},
-	}
-	AuthorizeNone = server.Roles{}
+	AuthorizeAll  = server.RolePermissions{Default: server.Permissions{"*": []string{"*"}}}
+	AuthorizeNone = server.RolePermissions{}
 
 	// default
-	AuthorizeDefaults = server.DefaultRoles("test")
+	AuthorizeDefaults = DefaultRoles("test")
 )
+
+// DefaultRoles is a set of role permissions used in testing
+func DefaultRoles(defaultRoot string) server.RolePermissions {
+	return server.RolePermissions{
+		// No access for un-authenticated users
+		Default: server.Permissions{},
+		Roles: map[string]server.Permissions{
+			// members can read objects in the default storage root
+			RoleMember: {
+				server.ActionReadObject: []string{server.AuthResource(defaultRoot, "*")},
+			},
+			// managers can read, commit, and delete objects in the default storage
+			// root
+			RoleManager: {
+				server.ActionReadObject:   []string{server.AuthResource(defaultRoot, "*")},
+				server.ActionCommitObject: []string{server.AuthResource(defaultRoot, "*")},
+				server.ActionDeleteObject: []string{server.AuthResource(defaultRoot, "*")},
+			},
+			// admins can do anything to objects in any storage root
+			RoleAdmin: {"*": []string{"*"}},
+		},
+	}
+}
 
 func testKey() *rsa.PrivateKey {
 	if key != nil {
@@ -60,7 +87,7 @@ func testKey() *rsa.PrivateKey {
 	return key
 }
 
-func AuthUserFunc() server.AuthUserFunc { return server.DefaultAuthUserFunc(&testKey().PublicKey) }
+func AuthUserFunc() server.AuthUserFunc { return server.JWSAuthFunc(&testKey().PublicKey) }
 
 // SetUserToken modifies the client to include a bearer token
 // for the given user. The token is signed with testKey.
@@ -85,15 +112,16 @@ func authUserToken(user server.AuthUser) string {
 	if err != nil {
 		panic(fmt.Errorf("user token signing: %v", err))
 	}
+	now := time.Now()
 	token := server.AuthToken{
 		User: user,
 		Claims: jwt.Claims{
-			Issuer:    "chaparral-test",
+			Issuer:    issuer,
 			Subject:   user.ID,
-			Audience:  jwt.Audience{"chaparral-test"},
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now().Add(-1 * time.Hour)),
-			Expiry:    jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
+			Audience:  jwt.Audience{issuer},
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now.Add(-1 * time.Hour)),
+			Expiry:    jwt.NewNumericDate(now.Add(1 * time.Hour)),
 		},
 	}
 	encToken, err := jwt.Signed(signer).Claims(token).Serialize()

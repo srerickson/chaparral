@@ -10,13 +10,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/srerickson/chaparral"
-	"github.com/srerickson/chaparral/server"
-	"github.com/srerickson/chaparral/server/backend"
-	"github.com/srerickson/chaparral/server/chapdb"
-	"github.com/srerickson/chaparral/server/store"
-	"github.com/srerickson/chaparral/server/uploader"
-	"github.com/srerickson/ocfl-go"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -25,6 +18,15 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/srerickson/chaparral"
+	"github.com/srerickson/chaparral/internal/testutil"
+	"github.com/srerickson/chaparral/server"
+	"github.com/srerickson/chaparral/server/backend"
+	"github.com/srerickson/chaparral/server/chapdb"
+	"github.com/srerickson/chaparral/server/store"
+	"github.com/srerickson/chaparral/server/uploader"
+	"github.com/srerickson/ocfl-go"
 
 	"github.com/go-chi/httplog/v2"
 	"github.com/kkyr/fig"
@@ -37,16 +39,16 @@ const healthCheck = "/alive"
 var configFile = flag.String("c", "", "config file")
 
 type config struct {
-	Backend string       `fig:"backend" default:"file://."`
-	Roots   []root       `fig:"roots"`
-	Uploads string       `fig:"uploads"`
-	Listen  string       `fig:"listen"`
-	StateDB string       `fig:"db" default:"chaparral.sqlite3"`
-	AuthPEM string       `fig:"auth_pem" default:"chaparral.pem"`
-	TLSCert string       `fig:"tls_cert"`
-	TLSKey  string       `fig:"tls_key"`
-	Debug   bool         `fig:"debug"`
-	Roles   server.Roles `fig:"roles"`
+	Backend string                 `fig:"backend" default:"file://."`
+	Roots   []root                 `fig:"roots"`
+	Uploads string                 `fig:"uploads"`
+	Listen  string                 `fig:"listen"`
+	StateDB string                 `fig:"db" default:"chaparral.sqlite3"`
+	AuthPEM string                 `fig:"auth_pem" default:"chaparral.pem"`
+	TLSCert string                 `fig:"tls_cert"`
+	TLSKey  string                 `fig:"tls_key"`
+	Debug   bool                   `fig:"debug"`
+	Roles   server.RolePermissions `fig:"roles"`
 }
 
 type root struct {
@@ -147,8 +149,8 @@ func main() {
 		server.WithStorageRoots(roots...),
 		server.WithUploaderManager(mgr),
 		server.WithLogger(logger.Logger),
-		server.WithAuthUserFunc(server.DefaultAuthUserFunc(&authKey.PublicKey)),
-		server.WithAuthorizer(server.DefaultRoles("main")),
+		server.WithAuthUserFunc(server.JWSAuthFunc(&authKey.PublicKey)),
+		server.WithAuthorizer(testutil.DefaultRoles("main")),
 		server.WithMiddleware(
 			// log all requests
 			httplog.RequestLogger(logger, []string{healthCheck}),

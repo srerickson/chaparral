@@ -42,7 +42,7 @@ func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
 	opts := []server.Option{
 		server.WithLogger(logger),
 		server.WithAuthUserFunc(AuthUserFunc()),
-		server.WithAuthorizer(server.DefaultRoles("test")),
+		server.WithAuthorizer(DefaultRoles("test")),
 	}
 	t.Run("local-root", func(t *testing.T) {
 		db := TestDB(t)
