@@ -1,15 +1,19 @@
 # This is a minimal chaparral configuration.
 
+# server listen port
+listen: ":8080"
+
 # Storage Backend 
 #
 # The backend can be set here or using the CHAPARRAL_BACKEND environment
-# variable.
+# variable. If it's set in both places, the environment variable value
+# is used.
 #
 # S3 example
 # backend: s3://ocfl-bucket?region=us-west-2
 
-# FS example
-# backend: file:///data
+# Default value uses wokring directory of the local filesystem
+# backend: file://.
 
 
 # Upload path
