@@ -1,8 +1,8 @@
 PEM_FILE='hack/data/chaparral.pem' # will be created
-USER_ID="0"
+USER_ID="1"
 USER_EMAIL="nobody@nothing.never"
 USER_NAME="test user"
-USER_ROLES="chaparral:admin"
+USER_ROLES="chaparral_admin"
 
 # generate signed client bearer token
 echo "client bearer token:"

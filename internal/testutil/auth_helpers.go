@@ -14,41 +14,37 @@ import (
 )
 
 const (
-	issuer = "chaparral-test"
-
-	// roles used for testing
-	RoleMember  = issuer + ":member"
-	RoleManager = issuer + ":manager"
-	RoleAdmin   = issuer + ":admin"
+	issuer      = "chaparral-test"
+	roleMember  = issuer + "_member"
+	roleManager = issuer + "_manager"
+	roleAdmin   = issuer + "_admin"
 )
 
 var (
 	// key used for JWS signing/validation in tests
 	key *rsa.PrivateKey
 
-	AnonUser = server.AuthUser{}
 	// canned users for testing
+	AnonUser   = server.AuthUser{}
 	MemberUser = server.AuthUser{
 		ID:    "test-member",
 		Email: "test-member@testing.com",
 		Name:  "Test Member",
-		Roles: []string{RoleMember}}
+		Roles: []string{roleMember}}
 	ManagerUser = server.AuthUser{
 		ID:    "test-manager",
 		Email: "test-manager@testing.com",
 		Name:  "Test Manager",
-		Roles: []string{RoleManager}}
+		Roles: []string{roleManager}}
 	AdminUser = server.AuthUser{
 		ID:    "test-admin",
 		Email: "test-admin@testing.com",
 		Name:  "Test Admin",
-		Roles: []string{RoleAdmin}}
+		Roles: []string{roleAdmin}}
 
 	// canned permissions used in testing
-	AuthorizeAll  = server.RolePermissions{Default: server.Permissions{"*": []string{"*"}}}
-	AuthorizeNone = server.RolePermissions{}
-
-	// default
+	AuthorizeAll      = server.RolePermissions{Default: server.Permissions{"*": []string{"*::*"}}}
+	AuthorizeNone     = server.RolePermissions{}
 	AuthorizeDefaults = DefaultRoles("test")
 )
 
@@ -59,18 +55,18 @@ func DefaultRoles(defaultRoot string) server.RolePermissions {
 		Default: server.Permissions{},
 		Roles: map[string]server.Permissions{
 			// members can read objects in the default storage root
-			RoleMember: {
+			roleMember: {
 				server.ActionReadObject: []string{server.AuthResource(defaultRoot, "*")},
 			},
 			// managers can read, commit, and delete objects in the default storage
 			// root
-			RoleManager: {
+			roleManager: {
 				server.ActionReadObject:   []string{server.AuthResource(defaultRoot, "*")},
 				server.ActionCommitObject: []string{server.AuthResource(defaultRoot, "*")},
 				server.ActionDeleteObject: []string{server.AuthResource(defaultRoot, "*")},
 			},
 			// admins can do anything to objects in any storage root
-			RoleAdmin: {"*": []string{"*"}},
+			roleAdmin: {"*": []string{"*::*"}},
 		},
 	}
 }

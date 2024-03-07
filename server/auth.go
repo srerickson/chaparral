@@ -127,9 +127,7 @@ type RolePermissions struct {
 	Roles   map[string]Permissions `json:"roles"`
 }
 
-func AuthResource(parts ...string) string {
-	return strings.Join(parts, permSep)
-}
+func (r RolePermissions) Empty() bool { return len(r.Roles) < 1 && len(r.Default) < 1 }
 
 // Allowed returns true if the user associated with the context has a role with a permission
 // allowing the action on the resource. If resource is '*', Allowed returns true if
@@ -163,25 +161,20 @@ func (p Permissions) allow(action string, resource string) bool {
 	return false
 }
 
+func AuthResource(root, obj string) string {
+	return root + permSep + obj
+}
+
 func resousrceMatch(a, b string) bool {
-	if a == "" || b == "" {
+	aRoot, aObj, aFound := strings.Cut(a, permSep)
+	if !aFound || aRoot == "" || aObj == "" {
 		return false
 	}
-	if a == "*" || b == "*" || a == b {
-		return true
-	}
-	if !strings.Contains(a, permSep) {
+	bRoot, bObj, bFound := strings.Cut(b, permSep)
+	if !bFound || bRoot == "" || bObj == "" {
 		return false
 	}
-	aParts := strings.Split(a, permSep)
-	bParts := strings.Split(b, permSep)
-	if len(aParts) != len(bParts) {
-		return false
-	}
-	for i := range aParts {
-		if !resousrceMatch(aParts[i], bParts[i]) {
-			return false
-		}
-	}
-	return true
+	return (aRoot == bRoot || aRoot == "*" || bRoot == "*") &&
+		(aObj == bObj || aObj == "*" || bObj == "*")
+
 }

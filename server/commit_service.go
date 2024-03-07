@@ -383,7 +383,7 @@ func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	}()
 	uploaderID := r.URL.Query().Get(chap.QueryUploaderID)
-	if s.auth != nil && !s.auth.Allowed(ctx, ActionCommitObject, "*") {
+	if s.auth != nil && !s.auth.Allowed(ctx, ActionCommitObject, "*::*") {
 		w.WriteHeader(http.StatusUnauthorized)
 		errMsg = "you don't have permission to upload files"
 		return
@@ -447,13 +447,13 @@ func (s *CommitService) AuthorizeInterceptor() connect.UnaryInterceptorFunc {
 				resource := AuthResource(msg.StorageRootId, msg.ObjectId)
 				ok = s.auth.Allowed(ctx, ActionDeleteObject, resource)
 			case *chaparralv1.NewUploaderRequest:
-				ok = s.auth.Allowed(ctx, ActionCommitObject, "*")
+				ok = s.auth.Allowed(ctx, ActionCommitObject, "*::*")
 			case *chaparralv1.DeleteUploaderRequest:
-				ok = s.auth.Allowed(ctx, ActionCommitObject, "*")
+				ok = s.auth.Allowed(ctx, ActionCommitObject, "*::*")
 			case *chaparralv1.GetUploaderRequest:
-				ok = s.auth.Allowed(ctx, ActionCommitObject, "*")
+				ok = s.auth.Allowed(ctx, ActionCommitObject, "*::*")
 			case *chaparralv1.ListUploadersRequest:
-				ok = s.auth.Allowed(ctx, ActionCommitObject, "*")
+				ok = s.auth.Allowed(ctx, ActionCommitObject, "*::*")
 			}
 			if !ok {
 				return nil, connect.NewError(connect.CodePermissionDenied, errors.New("API key insufficient permission"))

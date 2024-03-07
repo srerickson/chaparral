@@ -26,9 +26,36 @@ uploads: "uploads"
 # doesn't exist, it will be created using values in `init`. Additional storage
 # roots can be added, but they need to include a unique, non-empty `id` value.
 roots:
-- path: "ocfl-default" # path relative to CHAPARRAL_BACKEND
+- id: "main"
+  path: "ocfl-default" # path relative to CHAPARRAL_BACKEND
   init:
     # if the storage doesn't exist it will be created with 
     # these optiosn
     description: "default storage root"
     layout: "0003-hash-and-id-n-tuple-storage-layout"
+
+
+# Permissions config
+#
+# The permissions block defines a roles in terms of actions they can perform
+# for a set of resources (i.e., OCFL objects). You may use whatever naming
+# convention you like for the roles names, however actions and resources  should
+# follow a set form. Allowed actions are `read_object`, `commit_object`,
+# `delete_object`, and `*`. The latter matches any action. Resources should  have
+# the form `root-id::object-id`, where root-id is the ID set in the Storage
+# Root Config and object-id is the ocfl object ID. `root-id::*` matches any object
+# in the storage root with given id; `*::*` matches any object regardless of its
+# storage root.
+#
+# The "default" permission can be used base permissions for all users, including
+# un-authenticated requests.
+permissions:
+  default: {} # no access by default
+  roles:
+    # members can read any object in the 'main' storage root
+    chaparral_member:
+      read_object: ["main::*"]
+
+    # admins can do any action to any resource
+    chaparral_admin: 
+      "*": ["*::*"]
