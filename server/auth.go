@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 )
 
 const (
@@ -27,10 +27,11 @@ const (
 
 	// built-in user roles
 
-	// The RoleDefault can be used to assign permissions to all users, even
+	// RoleDefault can be used to assign permissions to all users, even
 	// un-authenticated ones. The default role is attached to users implicitly.
-	// It doesn't need to be included in the user roles.
+	// It doesn't need to be included in the user's list of roles.
 	RoleDefault = rolePrefix + ":default"
+
 	RoleMember  = rolePrefix + ":member"
 	RoleManager = rolePrefix + ":manager"
 	RoleAdmin   = rolePrefix + ":admin"
@@ -82,7 +83,7 @@ func DefaultAuthUserFunc(pub *rsa.PublicKey) AuthUserFunc {
 			// no header token
 			return
 		}
-		sig, err := jose.ParseSigned(encToken)
+		sig, err := jose.ParseSigned(encToken, []jose.SignatureAlgorithm{jose.RS256, jose.RS512})
 		if err != nil {
 			err = fmt.Errorf("parsing auth token: %w", err)
 			return

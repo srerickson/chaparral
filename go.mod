@@ -8,7 +8,7 @@ require (
 	github.com/carlmjohnson/be v0.23.2
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/go-chi/httplog/v2 v2.0.7
-	github.com/go-jose/go-jose/v3 v3.0.1
+	github.com/go-jose/go-jose/v4 v4.0.0
 	github.com/google/uuid v1.4.0
 	github.com/kkyr/fig v0.4.0
 	github.com/mattn/go-sqlite3 v1.14.19
@@ -16,7 +16,7 @@ require (
 	github.com/srerickson/ocfl-go v0.0.23
 	gocloud.dev v0.34.0
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
-	golang.org/x/net v0.19.0
+	golang.org/x/net v0.21.0
 	google.golang.org/protobuf v1.31.0
 )
 
@@ -51,9 +51,9 @@ require (
 	github.com/sethvargo/go-retry v0.2.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.18.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
-	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/api v0.151.0 // indirect

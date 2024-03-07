@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/srerickson/chaparral/server"
 )
 
@@ -96,14 +96,12 @@ func authUserToken(user server.AuthUser) string {
 			Expiry:    jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
 		},
 	}
-	encToken, err := jwt.Signed(signer).Claims(token).CompactSerialize()
+	encToken, err := jwt.Signed(signer).Claims(token).Serialize()
 	if err != nil {
 		panic(fmt.Errorf("user token signing: %v", err))
 	}
 	return encToken
 }
-
-// Permissions used for testing
 
 type bearerTokenTransport struct {
 	Token string
