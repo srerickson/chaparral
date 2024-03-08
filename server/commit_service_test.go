@@ -28,11 +28,11 @@ const size = 2_000_000
 var _ chapv1connect.CommitServiceHandler = (*server.CommitService)(nil)
 
 func TestCommitServiceCommit(t *testing.T) {
+	ctx := context.Background()
+	alg := `sha256`
 	test := func(t *testing.T, htc *http.Client, url string) {
-		ctx := context.Background()
-		chap := chapv1connect.NewCommitServiceClient(htc, url)
-		alg := `sha256`
-		newUpResp, err := chap.NewUploader(ctx, connect.NewRequest(&chapv1.NewUploaderRequest{
+		commitSrv := chapv1connect.NewCommitServiceClient(htc, url)
+		newUpResp, err := commitSrv.NewUploader(ctx, connect.NewRequest(&chapv1.NewUploaderRequest{
 			DigestAlgorithms: []string{alg},
 			Description:      "test commit",
 		}))
@@ -70,7 +70,7 @@ func TestCommitServiceCommit(t *testing.T) {
 				}},
 			},
 		}
-		_, err = chap.Commit(ctx, connect.NewRequest(commitReq))
+		_, err = commitSrv.Commit(ctx, connect.NewRequest(commitReq))
 		be.NilErr(t, err)
 		// // check object directly
 		// obj, err := store.GetObjectVersion(ctx, "new-01", 0)
@@ -84,7 +84,34 @@ func TestCommitServiceCommit(t *testing.T) {
 		// be.NilErr(t, err)
 		// be.NilErr(t, result.Err())
 	}
-	testutil.RunServiceTest(t, test)
+
+	testUnauthorized := func(t *testing.T, htc *http.Client, url string) {
+		testutil.SetUserToken(htc, testutil.AnonUser)
+		commitSrv := chapv1connect.NewCommitServiceClient(htc, url)
+		alg := `sha256`
+		_, err := commitSrv.NewUploader(ctx, connect.NewRequest(&chapv1.NewUploaderRequest{
+			DigestAlgorithms: []string{alg},
+			Description:      "test commit",
+		}))
+		be.True(t, err != nil)
+		var conErr *connect.Error
+		be.True(t, errors.As(err, &conErr))
+		be.Equal(t, connect.CodePermissionDenied, conErr.Code())
+
+		commitReq := &chapv1.CommitRequest{
+			StorageRootId:   testutil.TestStoreID,
+			DigestAlgorithm: alg,
+			Message:         "commit v1",
+			User:            &chapv1.User{Name: "Test"},
+			ObjectId:        "new-01",
+		}
+		_, err = commitSrv.Commit(ctx, connect.NewRequest(commitReq))
+		be.True(t, err != nil)
+		be.True(t, errors.As(err, &conErr))
+		be.Equal(t, connect.CodePermissionDenied, conErr.Code())
+	}
+
+	testutil.RunServiceTest(t, test, testUnauthorized)
 }
 
 func TestCommitServiceUploader(t *testing.T) {
