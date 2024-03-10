@@ -1,7 +1,8 @@
-# This is a minimal chaparral configuration.
+# This is a basic chaparral configuration.
 
-# server listen port
-listen: ":8080"
+# The address:port the server will listen on
+
+# listen: ":8080"
 
 # Storage Backend 
 #
@@ -9,11 +10,11 @@ listen: ":8080"
 # variable. If it's set in both places, the environment variable value
 # is used.
 #
-# S3 example
-# backend: s3://ocfl-bucket?region=us-west-2
-
-# Default value uses wokring directory of the local filesystem
+# Default value (current working directory):
 # backend: file://.
+#
+# S3 example:
+# backend: s3://ocfl-bucket?region=us-west-2
 
 
 # Upload path
@@ -31,28 +32,28 @@ uploads: "uploads"
 # roots can be added, but they need to include a unique, non-empty `id` value.
 roots:
 - id: "main"
-  path: "ocfl-default" # path relative to CHAPARRAL_BACKEND
+  path: "ocfl-default" # path relative to backend (CHAPARRAL_BACKEND)
   init:
     # if the storage doesn't exist it will be created with 
-    # these optiosn
+    # these options
     description: "default storage root"
     layout: "0003-hash-and-id-n-tuple-storage-layout"
 
 
 # Permissions config
 #
-# The permissions block defines a roles in terms of actions they can perform
-# for a set of resources (i.e., OCFL objects). You may use whatever naming
-# convention you like for the roles names, however actions and resources  should
-# follow a set form. Allowed actions are `read_object`, `commit_object`,
-# `delete_object`, and `*`. The latter matches any action. Resources should  have
-# the form `root-id::object-id`, where root-id is the ID set in the Storage
-# Root Config and object-id is the ocfl object ID. `root-id::*` matches any object
-# in the storage root with given id; `*::*` matches any object regardless of its
-# storage root.
+# The permissions block defines roles in terms of actions users assigned to
+# the role can perform for a set of resources (i.e., OCFL objects). You may
+# use whatever naming convention you like for the role names, however actions
+# and resources should follow a set form. Allowed actions are `read_object`,
+# `commit_object`, `delete_object`, and `*`. The latter matches any action.
+# Resources should  have the form `root-id::object-id`, where root-id is an
+# id set in the Storage Root Config and object-id is the OCFL object id. For
+# example, `public::*` matches any object in the `public` storage root; `*::*`
+# matches all objects in all storage roots.
 #
-# The "default" permission can be used base permissions for all users, including
-# un-authenticated requests.
+# The "default" permission is used to set base permissions for all users,
+# including un-authenticated requests.
 permissions:
   default: {} # no access by default
   roles:

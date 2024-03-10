@@ -23,6 +23,8 @@ On first run, a new default OCFL storage root is initialized if one doesn't
 exist. In addition, the server will create a new sqlite3 database for internal
 state and an RSA key for signing auth tokens.
 
+See [`config.yaml`](config.yaml) for configuration options.
+
 ## API 
 
 Chaparral's server API is defined using protocol buffers/gRPC and implemented
