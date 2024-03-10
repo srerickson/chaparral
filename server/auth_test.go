@@ -9,34 +9,48 @@ import (
 	"github.com/srerickson/chaparral/server"
 )
 
-var _ server.Authorizer = (server.Permissions)(nil)
+var _ server.Authorizer = (*server.RolePermissions)(nil)
 
-func TestDefaultPermissions(t *testing.T) {
+func TestRolePermissions(t *testing.T) {
 	ctx := context.Background()
-	perms := server.DefaultPermissions()
+	perms := testutil.DefaultRoles("main")
 
-	be.False(t, perms.RootActionAllowed(ctx, &server.AuthUser{}, server.ReadAction, ""))
-	be.False(t, perms.RootActionAllowed(ctx, &server.AuthUser{}, server.CommitAction, ""))
-	be.False(t, perms.RootActionAllowed(ctx, &server.AuthUser{}, server.DeleteAction, ""))
-	be.False(t, perms.RootActionAllowed(ctx, &server.AuthUser{}, server.AdminAction, ""))
+	be.False(t, perms.Allowed(ctx, server.ActionReadObject, "*::*"))
+	be.False(t, perms.Allowed(ctx, server.ActionCommitObject, "*::*"))
+	be.False(t, perms.Allowed(ctx, server.ActionDeleteObject, "*::*"))
+	be.False(t, perms.Allowed(ctx, "*", "*::*"))
 
-	be.True(t, perms.RootActionAllowed(ctx, &testutil.MemberUser, server.ReadAction, ""))
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.MemberUser, server.ReadAction, "anything"))
+	// members can only read from the default storage root
+	memberCtx := server.CtxWithAuthUser(ctx, testutil.MemberUser)
+	be.True(t, perms.Allowed(memberCtx, server.ActionReadObject, "main::object"))
+	be.True(t, perms.Allowed(memberCtx, server.ActionReadObject, "*::*"))
+	be.False(t, perms.Allowed(memberCtx, server.ActionReadObject, "private::object"))
+	be.False(t, perms.Allowed(memberCtx, server.ActionCommitObject, "main::object"))
+	be.False(t, perms.Allowed(memberCtx, server.ActionCommitObject, "*::*"))
+	be.False(t, perms.Allowed(memberCtx, server.ActionDeleteObject, "main::object"))
+	be.False(t, perms.Allowed(memberCtx, server.ActionDeleteObject, "*::*"))
+	be.False(t, perms.Allowed(memberCtx, "*", "*::*"))
 
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.MemberUser, server.CommitAction, ""))
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.MemberUser, server.DeleteAction, ""))
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.MemberUser, server.AdminAction, ""))
+	// manager role can do anything to objects in default storage root
+	managerCtx := server.CtxWithAuthUser(ctx, testutil.ManagerUser)
+	be.True(t, perms.Allowed(managerCtx, server.ActionReadObject, "main::object"))
+	be.True(t, perms.Allowed(managerCtx, server.ActionReadObject, "*::*"))
+	be.True(t, perms.Allowed(managerCtx, server.ActionReadObject, "main::object"))
+	be.True(t, perms.Allowed(managerCtx, server.ActionCommitObject, "*::*"))
+	be.True(t, perms.Allowed(managerCtx, server.ActionDeleteObject, "main::object"))
+	be.True(t, perms.Allowed(managerCtx, server.ActionDeleteObject, "*::*"))
+	be.True(t, perms.Allowed(managerCtx, server.ActionCommitObject, "main::object"))
 
-	be.True(t, perms.RootActionAllowed(ctx, &testutil.ManagerUser, server.ReadAction, ""))
-	be.True(t, perms.RootActionAllowed(ctx, &testutil.ManagerUser, server.CommitAction, ""))
-	be.True(t, perms.RootActionAllowed(ctx, &testutil.ManagerUser, server.DeleteAction, ""))
+	// managers can't do anything to objects outside the default storage root
+	be.False(t, perms.Allowed(managerCtx, server.ActionReadObject, "private::object"))
+	be.False(t, perms.Allowed(managerCtx, server.ActionCommitObject, "private::object"))
+	be.False(t, perms.Allowed(managerCtx, server.ActionDeleteObject, "private::object"))
+	be.False(t, perms.Allowed(managerCtx, "action", "private::object"))
+	be.False(t, perms.Allowed(managerCtx, "*", "*::*"))
 
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.ManagerUser, server.AdminAction, ""))
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.ManagerUser, server.ReadAction, "anything"))
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.ManagerUser, server.CommitAction, "anything"))
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.ManagerUser, server.DeleteAction, "anyting"))
-	be.False(t, perms.RootActionAllowed(ctx, &testutil.ManagerUser, server.AdminAction, "anything"))
-
-	be.True(t, perms.ActionAllowed(ctx, &testutil.AdminUser, "anyting"))
-	be.True(t, perms.RootActionAllowed(ctx, &testutil.AdminUser, "anything", "anyting"))
+	// admin role can do anything
+	adminCtx := server.CtxWithAuthUser(ctx, testutil.AdminUser)
+	be.True(t, perms.Allowed(adminCtx, "action", "private::object"))
+	be.True(t, perms.Allowed(adminCtx, "action", "main::object"))
+	be.True(t, perms.Allowed(adminCtx, "*", "*::*"))
 }

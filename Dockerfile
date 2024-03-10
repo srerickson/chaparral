@@ -18,19 +18,13 @@ RUN go mod download
 RUN go build -o chaparral ./cmd/chaparral
 RUN go build -o chaptoken ./cmd/chaptoken
 
-FROM cgr.dev/chainguard/glibc-dynamic:latest-dev
-# FROM cgr.dev/chainguard/glibc-dynamic:latest 
-USER root
-WORKDIR /
-COPY config.yaml config.yaml
+FROM cgr.dev/chainguard/glibc-dynamic:latest
+# FROM cgr.dev/chainguard/glibc-dynamic:latest-dev
+COPY --chown=nonroot:nonroot config.yaml /data/config.yaml
 COPY --from=builder /work/chaparral chaparral
 COPY --from=builder /work/chaptoken chaptoken
 
-# persistent data 
-RUN mkdir /data
+EXPOSE 8080
 
-ENV CHAPARRAL_BACKEND="file:///data"
-ENV CHAPARRAL_DB="/data/chaparral.sqlite3"
-ENV CHAPARRAL_AUTH_PEM="/data/chaparral.pem"
-ENV CHAPARRAL_LISTEN=":8080"
-CMD ["/chaparral","-c","/config.yaml"]
+WORKDIR /data
+CMD ["/chaparral","-c","config.yaml"]

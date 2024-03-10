@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/srerickson/chaparral/server"
 )
 
@@ -65,7 +65,7 @@ func genToken(key *rsa.PrivateKey, id, email, name string, exp int, roles ...str
 			Expiry:    jwt.NewNumericDate(time.Now().AddDate(0, 0, exp)),
 		},
 	}
-	return jwt.Signed(signer).Claims(token).CompactSerialize()
+	return jwt.Signed(signer).Claims(token).Serialize()
 }
 
 func readKey(keyfile string) (*rsa.PrivateKey, error) {

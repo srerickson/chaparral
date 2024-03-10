@@ -8,9 +8,16 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/srerickson/chaparral/server"
+)
+
+const (
+	issuer      = "chaparral-test"
+	roleMember  = issuer + "_member"
+	roleManager = issuer + "_manager"
+	roleAdmin   = issuer + "_admin"
 )
 
 var (
@@ -18,31 +25,51 @@ var (
 	key *rsa.PrivateKey
 
 	// canned users for testing
+	AnonUser   = server.AuthUser{}
 	MemberUser = server.AuthUser{
 		ID:    "test-member",
 		Email: "test-member@testing.com",
 		Name:  "Test Member",
-		Roles: []string{server.MemberRole}}
+		Roles: []string{roleMember}}
 	ManagerUser = server.AuthUser{
 		ID:    "test-manager",
 		Email: "test-manager@testing.com",
 		Name:  "Test Manager",
-		Roles: []string{server.ManagerRole}}
+		Roles: []string{roleManager}}
 	AdminUser = server.AuthUser{
 		ID:    "test-admin",
 		Email: "test-admin@testing.com",
 		Name:  "Test Admin",
-		Roles: []string{server.AdminRole}}
+		Roles: []string{roleAdmin}}
 
 	// canned permissions used in testing
-	AllowAll = server.Permissions{
-		// anyone can do anythong
-		server.DefaultRole: []server.RolePermission{
-			{Actions: []string{"*"}, StorageRootID: "*"},
+	AuthorizeAll      = server.RolePermissions{Default: server.Permissions{"*": []string{"*::*"}}}
+	AuthorizeNone     = server.RolePermissions{}
+	AuthorizeDefaults = DefaultRoles("test")
+)
+
+// DefaultRoles is a set of role permissions used in testing
+func DefaultRoles(defaultRoot string) server.RolePermissions {
+	return server.RolePermissions{
+		// No access for un-authenticated users
+		Default: server.Permissions{},
+		Roles: map[string]server.Permissions{
+			// members can read objects in the default storage root
+			roleMember: {
+				server.ActionReadObject: []string{server.AuthResource(defaultRoot, "*")},
+			},
+			// managers can read, commit, and delete objects in the default storage
+			// root
+			roleManager: {
+				server.ActionReadObject:   []string{server.AuthResource(defaultRoot, "*")},
+				server.ActionCommitObject: []string{server.AuthResource(defaultRoot, "*")},
+				server.ActionDeleteObject: []string{server.AuthResource(defaultRoot, "*")},
+			},
+			// admins can do anything to objects in any storage root
+			roleAdmin: {"*": []string{"*::*"}},
 		},
 	}
-	AllowNone = server.Permissions(nil)
-)
+}
 
 func testKey() *rsa.PrivateKey {
 	if key != nil {
@@ -56,44 +83,49 @@ func testKey() *rsa.PrivateKey {
 	return key
 }
 
-// AuthorizeClient modifies the client to include a bearer token
+func AuthUserFunc() server.AuthUserFunc { return server.JWSAuthFunc(&testKey().PublicKey) }
+
+// SetUserToken modifies the client to include a bearer token
 // for the given user. The token is signed with testKey.
-func authorizeClient(cli *http.Client, user server.AuthUser) {
+func SetUserToken(cli *http.Client, user server.AuthUser) {
 	if cli.Transport == nil {
 		cli.Transport = http.DefaultTransport
 	}
+	if existing, ok := cli.Transport.(*bearerTokenTransport); ok {
+		existing.Token = authUserToken(user)
+		return
+	}
 	cli.Transport = &bearerTokenTransport{
-		Token: AuthUserToken(user),
+		Token: authUserToken(user),
 		Base:  cli.Transport,
 	}
 }
 
-// AuthUserToken generates a token for the given user signed with the test kßey.
-func AuthUserToken(user server.AuthUser) string {
+// authUserToken generates a token for the given user signed with the test kßey.
+func authUserToken(user server.AuthUser) string {
 	key := testKey()
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, (&jose.SignerOptions{}).WithType("JWT"))
 	if err != nil {
 		panic(fmt.Errorf("user token signing: %v", err))
 	}
+	now := time.Now()
 	token := server.AuthToken{
 		User: user,
 		Claims: jwt.Claims{
-			Issuer:    "chaparral-test",
+			Issuer:    issuer,
 			Subject:   user.ID,
-			Audience:  jwt.Audience{"chaparral-test"},
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now().Add(-1 * time.Hour)),
-			Expiry:    jwt.NewNumericDate(time.Now().Add(1 * time.Hour)),
+			Audience:  jwt.Audience{issuer},
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now.Add(-1 * time.Hour)),
+			Expiry:    jwt.NewNumericDate(now.Add(1 * time.Hour)),
 		},
 	}
-	encToken, err := jwt.Signed(signer).Claims(token).CompactSerialize()
+	encToken, err := jwt.Signed(signer).Claims(token).Serialize()
 	if err != nil {
 		panic(fmt.Errorf("user token signing: %v", err))
 	}
 	return encToken
 }
-
-// Permissions used for testing
 
 type bearerTokenTransport struct {
 	Token string

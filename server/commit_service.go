@@ -299,6 +299,7 @@ func (s *CommitService) ListUploaders(ctx context.Context, req *connect.Request[
 		err := errors.New("the storage root does not allow uploading")
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
+	// TODO: only list uploaders owned by the user
 	ids, err := s.uploadMgr.UploaderIDs(ctx)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -352,6 +353,7 @@ func (s *CommitService) DeleteUploader(ctx context.Context, req *connect.Request
 			logger.Error(err.Error())
 		}
 	}()
+	// TODO: only allow deleting uploaders created by the user
 	if err := upper.Delete(noCancelCtx); err != nil {
 		return nil, connect.NewError(connect.CodeAborted, err)
 	}
@@ -362,7 +364,6 @@ func (s *CommitService) DeleteUploader(ctx context.Context, req *connect.Request
 // Handler for file uploads.
 func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user := AuthUserFromCtx(ctx)
 	logger := LoggerFromCtx(ctx)
 	result := chap.Upload{}
 	var errMsg string
@@ -382,7 +383,7 @@ func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 
 	}()
 	uploaderID := r.URL.Query().Get(chap.QueryUploaderID)
-	if s.auth != nil && !s.auth.ActionAllowed(ctx, &user, CommitAction) {
+	if s.auth != nil && !s.auth.Allowed(ctx, ActionCommitObject, "*::*") {
 		w.WriteHeader(http.StatusUnauthorized)
 		errMsg = "you don't have permission to upload files"
 		return
@@ -403,6 +404,7 @@ func (s *CommitService) HandleUpload(w http.ResponseWriter, r *http.Request) {
 			logger.Error(err.Error())
 		}
 	}()
+	// TODO: only allow uploading to own uploaders
 	upload, err := upper.Write(ctx, r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -426,31 +428,32 @@ func (s *CommitService) AuthorizeInterceptor() connect.UnaryInterceptorFunc {
 				// just for server side
 				return next(ctx, req)
 			}
-			user := AuthUserFromCtx(ctx)
 			var ok bool
 			switch msg := req.Any().(type) {
 			case *chaparralv1.CommitRequest:
-				ok = s.auth.RootActionAllowed(ctx, &user, CommitAction, msg.StorageRootId)
+				resource := AuthResource(msg.StorageRootId, msg.ObjectId)
+				ok = s.auth.Allowed(ctx, ActionCommitObject, resource)
 				if !ok {
 					break
 				}
 				for _, item := range msg.ContentSources {
 					// check permission to read source object (if commit uses one)
 					if obj, isObj := item.Item.(*chaparralv1.CommitRequest_ContentSourceItem_Object); isObj {
-						ok = s.auth.RootActionAllowed(ctx, &user, ReadAction, obj.Object.StorageRootId)
+						resource := AuthResource(obj.Object.StorageRootId, obj.Object.ObjectId)
+						ok = s.auth.Allowed(ctx, ActionReadObject, resource)
 					}
-
 				}
 			case *chaparralv1.DeleteObjectRequest:
-				ok = s.auth.RootActionAllowed(ctx, &user, DeleteAction, msg.StorageRootId)
+				resource := AuthResource(msg.StorageRootId, msg.ObjectId)
+				ok = s.auth.Allowed(ctx, ActionDeleteObject, resource)
 			case *chaparralv1.NewUploaderRequest:
-				ok = s.auth.ActionAllowed(ctx, &user, CommitAction)
+				ok = s.auth.Allowed(ctx, ActionCommitObject, "*::*")
 			case *chaparralv1.DeleteUploaderRequest:
-				ok = s.auth.ActionAllowed(ctx, &user, CommitAction)
+				ok = s.auth.Allowed(ctx, ActionCommitObject, "*::*")
 			case *chaparralv1.GetUploaderRequest:
-				ok = s.auth.ActionAllowed(ctx, &user, CommitAction)
+				ok = s.auth.Allowed(ctx, ActionCommitObject, "*::*")
 			case *chaparralv1.ListUploadersRequest:
-				ok = s.auth.ActionAllowed(ctx, &user, CommitAction)
+				ok = s.auth.Allowed(ctx, ActionCommitObject, "*::*")
 			}
 			if !ok {
 				return nil, connect.NewError(connect.CodePermissionDenied, errors.New("API key insufficient permission"))

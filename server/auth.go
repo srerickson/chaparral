@@ -4,7 +4,6 @@ package server
 
 import (
 	"context"
-	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,31 +11,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-jose/go-jose/v3"
-	"github.com/go-jose/go-jose/v3/jwt"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 )
 
 const (
 	// actions
-	ReadAction   string = "read"
-	CommitAction string = "write"
-	DeleteAction string = "delete"
-	AdminAction  string = "administer"
+	ActionReadObject   = "read_object"
+	ActionCommitObject = "commit_object"
+	ActionDeleteObject = "delete_object"
 
-	rolePrefix = "chaparral"
-
-	// built-in user roles
-
-	// The DefaultRole can be used to assign permissions to all users, even
-	// un-authenticated ones. The default role is attached to users implicitly.
-	// It doesn't need to be included in the user roles.
-	DefaultRole = rolePrefix + ":default"
-	MemberRole  = rolePrefix + ":member"
-	ManagerRole = rolePrefix + ":manager"
-	AdminRole   = rolePrefix + ":admin"
+	permSep = "::"
 )
-
-// var pkenv = strings.ToUpper(rolePrefix) + "_JWK"
 
 type userCtxKey struct{}
 
@@ -70,9 +56,9 @@ type AuthToken struct {
 	User AuthUser `json:"chaparral"`
 }
 
-// DefaultAuthUserFunc returns an Authentication func that looks
-// for a signed JWT bearer token.
-func DefaultAuthUserFunc(pub *rsa.PublicKey) AuthUserFunc {
+// JWSAuthFunc returns an Authentication func that looks
+// for a jwt bearer token signed with the public key.
+func JWSAuthFunc(pubkey any) AuthUserFunc {
 	auth := func(r *http.Request) (user AuthUser, err error) {
 		authHeader := r.Header.Get("Authorization")
 		_, encToken, _ := strings.Cut(authHeader, " ")
@@ -80,12 +66,12 @@ func DefaultAuthUserFunc(pub *rsa.PublicKey) AuthUserFunc {
 			// no header token
 			return
 		}
-		sig, err := jose.ParseSigned(encToken)
+		sig, err := jose.ParseSigned(encToken, []jose.SignatureAlgorithm{jose.RS256, jose.RS512})
 		if err != nil {
 			err = fmt.Errorf("parsing auth token: %w", err)
 			return
 		}
-		payload, err := sig.Verify(pub)
+		payload, err := sig.Verify(pubkey)
 		if err != nil {
 			err = fmt.Errorf("auth token signature verification failed: %w", err)
 			return
@@ -127,83 +113,68 @@ func AuthUserMiddleware(authFn AuthUserFunc) func(http.Handler) http.Handler {
 
 // Authorizer is an interface used by types that can perform authorziation
 // for requests.
-// TODO: simplify this interface by removing user arg from methods; get
-// the user from the ctx.
 type Authorizer interface {
-	// RootActionAllowed returns true if the user is allowed to perform action
+	// Allowed returns true if the user is allowed to perform action
 	// on the resource with the given root_id.
-	RootActionAllowed(ctx context.Context, user *AuthUser, action, root_id string) bool
-	// ActionAllowed return true if the user has permission to perform action
-	// on at least one resource.
-	ActionAllowed(ctx context.Context, user *AuthUser, action string) bool
+	Allowed(ctx context.Context, action string, resources string) bool
 }
 
-// Permissions is a map of roles to permissions. It implements the Authorizer
+// RolePermissions is a map of role names to Permissions. It implements the Authorizer
 // interface.
-type Permissions map[string][]RolePermission
+type RolePermissions struct {
+	// Default permissions that apply to all users and un-authenticated requests
+	Default Permissions            `json:"default"`
+	Roles   map[string]Permissions `json:"roles"`
+}
 
-// RootActionAllowed returns true if the user has a role with a permission
-// allowing the action on the resource with the given group and root ids.
-func (p Permissions) RootActionAllowed(_ context.Context, user *AuthUser, action, root string) bool {
-	roles := []string{DefaultRole}
-	if user != nil {
-		roles = append(roles, user.Roles...)
+func (r RolePermissions) Empty() bool { return len(r.Roles) < 1 && len(r.Default) < 1 }
+
+// Allowed returns true if the user associated with the context has a role with a permission
+// allowing the action on the resource. If resource is '*', Allowed returns true if
+// the if the action is allowed for any resource.
+func (r RolePermissions) Allowed(ctx context.Context, action string, resource string) bool {
+	user := AuthUserFromCtx(ctx)
+	if r.Default.allow(action, resource) {
+		return true
 	}
-	return slices.ContainsFunc(roles, func(r string) bool {
-		return slices.ContainsFunc(p[r], func(rp RolePermission) bool {
-			return rp.allowRootAction(action, root)
-		})
+	return slices.ContainsFunc(user.Roles, func(role string) bool {
+		perm, ok := r.Roles[role]
+		if !ok {
+			return false
+		}
+		return perm.allow(action, resource)
 	})
 }
 
-func (p Permissions) ActionAllowed(_ context.Context, user *AuthUser, action string) bool {
-	roles := []string{DefaultRole}
-	if user != nil {
-		roles = append(roles, user.Roles...)
+// Permissions maps actions to resources for which the action is allowed.
+type Permissions map[string][]string
+
+func (p Permissions) allow(action string, resource string) bool {
+	for _, act := range []string{action, "*"} {
+		ok := slices.ContainsFunc(p[act], func(okResource string) bool {
+			return resousrceMatch(resource, okResource)
+		})
+		if ok {
+			return true
+		}
 	}
-	return slices.ContainsFunc(roles, func(r string) bool {
-		return slices.ContainsFunc(p[r], func(rp RolePermission) bool {
-			return rp.allowAction(action)
-		})
-	})
+	return false
 }
 
-type RolePermission struct {
-	Actions       []string `json:"actions"`
-	StorageRootID string   `json:"storage_root_id"`
+func AuthResource(root, obj string) string {
+	return root + permSep + obj
 }
 
-func (p RolePermission) allowAction(action string) bool {
-	return slices.ContainsFunc(p.Actions, func(a string) bool {
-		return a == "*" || a == action
-	})
-}
-
-func (p RolePermission) allowRootAction(action, root string) bool {
-	if !p.allowAction(action) {
+func resousrceMatch(a, b string) bool {
+	aRoot, aObj, aFound := strings.Cut(a, permSep)
+	if !aFound || aRoot == "" || aObj == "" {
 		return false
 	}
-	return (p.StorageRootID == "*" || p.StorageRootID == root)
-}
-
-// DefaultPermissions returns the default server Permissions.
-func DefaultPermissions() Permissions {
-	return Permissions{
-		// No access for un-authenticated users
-		DefaultRole: []RolePermission{},
-		// members can read objects in the default storage root
-		MemberRole: []RolePermission{
-			{Actions: []string{ReadAction}},
-		},
-		// managers can read, commit, and delete objects in the default storage
-		// root
-		ManagerRole: []RolePermission{
-			// storage root
-			{Actions: []string{ReadAction, CommitAction, DeleteAction}},
-		},
-		// admins can do anything to objects in any storage root
-		AdminRole: []RolePermission{
-			{Actions: []string{"*"}, StorageRootID: "*"},
-		},
+	bRoot, bObj, bFound := strings.Cut(b, permSep)
+	if !bFound || bRoot == "" || bObj == "" {
+		return false
 	}
+	return (aRoot == bRoot || aRoot == "*" || bRoot == "*") &&
+		(aObj == bObj || aObj == "*" || bObj == "*")
+
 }

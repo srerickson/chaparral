@@ -54,6 +54,10 @@ func Open(driver string, file string, migrate bool) (*sql.DB, error) {
 	return db, nil
 }
 
+func (db *SQLiteDB) Close() error {
+	return (*sql.DB)(db).Close()
+}
+
 func (db *SQLiteDB) sqlDB() *sql.DB {
 	return (*sql.DB)(db)
 }
