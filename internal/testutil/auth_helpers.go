@@ -83,7 +83,13 @@ func testKey() *rsa.PrivateKey {
 	return key
 }
 
-func AuthUserFunc() server.AuthUserFunc { return server.JWSAuthFunc(&testKey().PublicKey) }
+func AuthUserFunc() server.AuthUserFunc {
+	fn, err := server.JWSAuthFunc(&testKey().PublicKey)
+	if err != nil {
+		panic(err)
+	}
+	return fn
+}
 
 // SetUserToken modifies the client to include a bearer token
 // for the given user. The token is signed with testKey.

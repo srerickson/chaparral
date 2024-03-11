@@ -32,6 +32,14 @@ using [connect-go](https://github.com/connectrpc/connect-go). It supports both
 gRPC and http/1.1 requests. Documentation is available through the [Buf schema
 registry](https://buf.build/srerickson/chaparral/docs/main:chaparral.v1). 
 
+## Building Images
+
+Images are built with `ko`
+
+```sh
+ VERSION=0.x.y KO_DOCKER_REPO=srerickson ko -B build ./cmd/chaparral
+```
+
 ## About the name
 
 > Chaparral is a shrubland plant community found primarily in California, in

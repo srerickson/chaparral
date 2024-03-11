@@ -9,11 +9,11 @@ import (
 	"net/url"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/srerickson/chaparral"
 	sqlite "github.com/srerickson/chaparral/server/chapdb/sqlite_gen"
 	"github.com/srerickson/chaparral/server/uploader"
 	"github.com/srerickson/ocfl-go"
+	_ "modernc.org/sqlite"
 )
 
 func sqliteOpts() url.Values {
@@ -36,7 +36,8 @@ func Open(driver string, file string, migrate bool) (*sql.DB, error) {
 			opts["cache"] = []string{"shared"}
 			opts["mode"] = []string{"memory"}
 		}
-		db, err = sql.Open(driver, file+"?"+url.Values(opts).Encode())
+		// modernc.org uses 'sqlite', not 'sqlite3'
+		db, err = sql.Open("sqlite", file+"?"+url.Values(opts).Encode())
 		if err != nil {
 			return nil, err
 		}
