@@ -1,0 +1,10 @@
+defaultPlatforms:
+- linux/arm64
+- linux/amd64
+builds:
+- id: chaparral
+  main: ./cmd/chaparral
+  flags:
+  - -trimpath
+  ldflags:
+  - -X github.com/srerickson/chaparral.VERSION={{.Env.VERSION}}

@@ -4,7 +4,8 @@ import (
 	"runtime/debug"
 )
 
-var VERSION = "devel"
+// VERSION is set with ldflags -X
+var VERSION string
 
 var CODE_VERSION = func() string {
 	if info, ok := debug.ReadBuildInfo(); ok {

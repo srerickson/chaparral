@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"golang.org/x/crypto/ed25519"
 )
 
 const (
@@ -58,7 +60,13 @@ type AuthToken struct {
 
 // JWSAuthFunc returns an Authentication func that looks
 // for a jwt bearer token signed with the public key.
-func JWSAuthFunc(pubkey any) AuthUserFunc {
+func JWSAuthFunc(pubkey any) (AuthUserFunc, error) {
+	switch pubkey.(type) {
+	case *rsa.PublicKey:
+	case ed25519.PublicKey:
+	default:
+		return nil, fmt.Errorf("unsupported key type: %v", pubkey)
+	}
 	auth := func(r *http.Request) (user AuthUser, err error) {
 		authHeader := r.Header.Get("Authorization")
 		_, encToken, _ := strings.Cut(authHeader, " ")
@@ -91,7 +99,7 @@ func JWSAuthFunc(pubkey any) AuthUserFunc {
 		user = token.User
 		return
 	}
-	return auth
+	return auth, nil
 }
 
 func AuthUserMiddleware(authFn AuthUserFunc) func(http.Handler) http.Handler {

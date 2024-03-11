@@ -36,9 +36,10 @@ type Config struct {
 	Backend     string                 `fig:"backend" default:"file://."`
 	Roots       []Root                 `fig:"roots"`
 	Uploads     string                 `fig:"uploads"`
-	Listen      string                 `fig:"listen"`
-	StateDB     string                 `fig:"db" default:"chaparral.sqlite3"`
-	AuthPEM     string                 `fig:"auth_pem" default:"chaparral.pem"`
+	Listen      string                 `fig:"listen" default:":8080"`
+	DB          string                 `fig:"db" default:"/tmp/chaparral.sqlite3"`
+	PubkeyFile  string                 `fig:"pubkey_file"`
+	Pubkey      string                 `fig:"pubkey"`
 	TLSCert     string                 `fig:"tls_cert"`
 	TLSKey      string                 `fig:"tls_key"`
 	Debug       bool                   `fig:"debug"`
@@ -55,6 +56,7 @@ type Root struct {
 }
 
 func Run(ctx context.Context, conf *Config) error {
+	var serviceOptions []server.Option
 
 	var loggerOptions = httplog.Options{
 		JSON:             true,
@@ -67,14 +69,17 @@ func Run(ctx context.Context, conf *Config) error {
 		loggerOptions.LogLevel = slog.LevelDebug
 	}
 	logger := httplog.NewLogger("chaparral", loggerOptions)
+	serviceOptions = append(serviceOptions,
+		server.WithLogger(logger.Logger),
+		server.WithMiddleware(httplog.RequestLogger(logger, []string{healthCheck})))
 
 	logger.Debug("chaparral version",
 		"code_version", chaparral.CODE_VERSION,
 		"version", chaparral.VERSION)
 
 	// sqlite3 for server state
-	logger.Debug("opening database...", "config", conf.StateDB)
-	db, err := chapdb.Open("sqlite3", conf.StateDB, true)
+	logger.Debug("opening database...", "config", conf.DB)
+	db, err := chapdb.Open("sqlite3", conf.DB, true)
 	if err != nil {
 		return fmt.Errorf("loading database: %w", err)
 	}
@@ -82,18 +87,12 @@ func Run(ctx context.Context, conf *Config) error {
 	chapDB := (*chapdb.SQLiteDB)(db)
 
 	logger.Debug("initializing backend...", "config", conf.Backend)
-	backend, err := newBack(conf.Backend)
+
+	fsys, err := newBackend(conf.Backend)
 	if err != nil {
-		return fmt.Errorf("initializing backend: %w", err)
+		return err
 	}
 
-	fsys, err := backend.NewFS()
-	if err != nil {
-		return fmt.Errorf("backend configuration has errors: %w", err)
-	}
-	if ok, err := backend.IsAccessible(); !ok {
-		return fmt.Errorf("backend is not accessible: %w", err)
-	}
 	var rootPaths []string
 	var roots []*store.StorageRoot
 	for _, rootConfig := range conf.Roots {
@@ -112,45 +111,48 @@ func Run(ctx context.Context, conf *Config) error {
 		roots = append(roots, r)
 		rootPaths = append(rootPaths, rootConfig.Path)
 	}
-
-	// authentication config (load RSA key used in JWS signing)
-	logger.Debug("using keyfile...", "config", conf.AuthPEM)
-	authKey, err := loadRSAKey(conf.AuthPEM)
-	if err != nil {
-		return fmt.Errorf("loading auth keyfile: %w", err)
+	if len(roots) < 1 {
+		logger.Warn("no storage roots configured")
 	}
 
+	serviceOptions = append(serviceOptions, server.WithStorageRoots(roots...))
+
 	// upload manager is required for allowing uploads
-	var mgr *uploader.Manager
 	if conf.Uploads != "" {
-		logger.Debug("uploads are enabled", "config", conf.Uploads)
-		mgr = uploader.NewManager(fsys, conf.Uploads, chapDB)
+		mgr := uploader.NewManager(fsys, conf.Uploads, chapDB)
 		rootPaths = append(rootPaths, conf.Uploads)
+		serviceOptions = append(serviceOptions, server.WithUploaderManager(mgr))
+		logger.Debug("uploads are enabled", "config", conf.Uploads)
 	}
 
 	if pathConflict(rootPaths...) {
 		return fmt.Errorf("storage root and uploader paths have conflicts: %s", strings.Join(rootPaths, ", "))
 	}
 
+	// authentication config (load RSA key used in JWS signing)
+	if conf.Pubkey != "" || conf.PubkeyFile != "" {
+		pubkey, err := getPubkey([]byte(conf.Pubkey), conf.PubkeyFile)
+		if err != nil {
+			return fmt.Errorf("parsing public key: %w", err)
+		}
+		authFunc, err := server.JWSAuthFunc(pubkey)
+		if err != nil {
+			return err
+		}
+		logger.Debug("using public key for JWS verification")
+		serviceOptions = append(serviceOptions, server.WithAuthUserFunc(authFunc))
+	}
+
 	// role definitions
 	roles := conf.Permissions
-	if roles.Empty() {
+	if conf.Permissions.Empty() {
 		// allow everything:
-		roles.Default = server.Permissions{"*": []string{"*"}}
+		roles.Default = server.Permissions{"*": []string{"*::*"}}
 	}
-	logger.Debug("default role", "permissions", roles.Default)
+	logger.Debug("applying permissions", "roles", roles)
+	serviceOptions = append(serviceOptions, server.WithAuthorizer(roles))
 
-	mux := server.New(
-		server.WithStorageRoots(roots...),
-		server.WithUploaderManager(mgr),
-		server.WithLogger(logger.Logger),
-		server.WithAuthUserFunc(server.JWSAuthFunc(&authKey.PublicKey)),
-		server.WithAuthorizer(roles),
-		server.WithMiddleware(
-			// log all requests
-			httplog.RequestLogger(logger, []string{healthCheck}),
-		),
-	)
+	mux := server.New(serviceOptions...)
 	// healthcheck endpoint
 	mux.Handle(healthCheck, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "OK")
@@ -162,7 +164,7 @@ func Run(ctx context.Context, conf *Config) error {
 	// mux.Mount(grpcreflect.NewHandlerV1Alpha(reflector))
 
 	logger.Debug("TLS config", "cert", conf.TLSCert, "key", conf.TLSKey)
-	tlsCfg, err := newTLSConfig(conf.TLSCert, conf.TLSKey, "")
+	tlsCfg, err := tlsConfig(conf.TLSCert, conf.TLSKey, "")
 	if err != nil {
 		return fmt.Errorf("TLS config errors: %w", err)
 	}
@@ -170,8 +172,6 @@ func Run(ctx context.Context, conf *Config) error {
 		Addr:      conf.Listen,
 		TLSConfig: tlsCfg,
 	}
-
-	logger.Info("starting server", "listen", conf.Listen, "h2c", tlsCfg == nil)
 
 	// handle shutdown
 	c := make(chan os.Signal, 2)
@@ -192,14 +192,15 @@ func Run(ctx context.Context, conf *Config) error {
 		}
 	}()
 
+	logger.Info("starting server", "listen", conf.Listen, "h2c", tlsCfg == nil)
 	var srvErr error
 	switch {
-	case httpSrv.TLSConfig == nil:
-		httpSrv.Handler = h2c.NewHandler(mux, &http2.Server{})
-		srvErr = httpSrv.ListenAndServe()
-	default:
+	case httpSrv.TLSConfig != nil:
 		httpSrv.Handler = mux
 		srvErr = httpSrv.ListenAndServeTLS("", "")
+	default:
+		httpSrv.Handler = h2c.NewHandler(mux, &http2.Server{})
+		srvErr = httpSrv.ListenAndServe()
 	}
 	if errors.Is(http.ErrServerClosed, srvErr) {
 		srvErr = nil
@@ -207,61 +208,52 @@ func Run(ctx context.Context, conf *Config) error {
 	return srvErr
 }
 
-type back interface {
-	Name() string
-	IsAccessible() (bool, error)
-	NewFS() (ocfl.WriteFS, error)
-}
-
-func newBack(storage string) (back, error) {
+func newBackend(storage string) (ocfl.WriteFS, error) {
+	var b interface {
+		IsAccessible() (bool, error)
+		NewFS() (ocfl.WriteFS, error)
+	}
 	kind, loc, _ := strings.Cut(storage, "://")
 	switch kind {
 	case "file":
-		return &backend.FileBackend{Path: loc}, nil
+		b = &backend.FileBackend{Path: loc}
 	case "s3":
 		bucket, query, _ := strings.Cut(loc, "?")
-		back := &backend.S3Backend{Bucket: bucket}
+		s3back := &backend.S3Backend{Bucket: bucket}
 		if query != "" {
 			opts, err := url.ParseQuery(query)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("parsing s3 backend options: %w", err)
 			}
-			back.Options = opts
+			s3back.Options = opts
 		}
-		return back, nil
+		b = s3back
 	default:
-		return nil, fmt.Errorf("invalid storage backen: %q", storage)
+		return nil, fmt.Errorf("invalid storage backend: %q", storage)
 	}
+	fsys, err := b.NewFS()
+	if err != nil {
+		return nil, fmt.Errorf("while initializing backend: %w", err)
+	}
+	if ok, err := b.IsAccessible(); !ok {
+		return nil, fmt.Errorf("backend is not accessible: %w", err)
+	}
+	return fsys, nil
 }
 
-func loadRSAKey(name string) (*rsa.PrivateKey, error) {
-	bytes, err := os.ReadFile(name)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-		if err := genRSAKey(name); err != nil {
-			return nil, err
-		}
-		bytes, err = os.ReadFile(name)
+func getPubkey(pemBytes []byte, pemFile string) (any, error) {
+	if len(pemBytes) < 1 {
+		var err error
+		pemBytes, err = os.ReadFile(pemFile)
 		if err != nil {
 			return nil, err
 		}
 	}
-	block, _ := pem.Decode(bytes)
+	block, _ := pem.Decode([]byte(pemBytes))
 	if block == nil {
-		return nil, errors.New("key is not PEM encoded")
+		panic("failed to parse PEM block containing the public key")
 	}
-	anyKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return x509.ParsePKCS1PrivateKey(block.Bytes)
-	}
-	switch k := anyKey.(type) {
-	case *rsa.PrivateKey:
-		return k, nil
-	default:
-		return nil, errors.New("not an rsa key")
-	}
+	return x509.ParsePKIXPublicKey(block.Bytes)
 }
 
 func genRSAKey(name string) error {
@@ -285,28 +277,28 @@ func genRSAKey(name string) error {
 	})
 }
 
-func newTLSConfig(crt, key, clientCA string) (*tls.Config, error) {
-	var tlsCfg *tls.Config
-	if crt != "" || key != "" {
-		var err error
-		tlsCfg = &tls.Config{Certificates: make([]tls.Certificate, 1)}
-		tlsCfg.Certificates[0], err = tls.LoadX509KeyPair(crt, key)
-		if err != nil {
-			return nil, err
-		}
-		if clientCA != "" {
-			pem, err := os.ReadFile(clientCA)
-			if err != nil {
-				return nil, err
-			}
-			clientCAs := x509.NewCertPool()
-			if !clientCAs.AppendCertsFromPEM(pem) {
-				return nil, fmt.Errorf("%q not added to certool", clientCA)
-			}
-			tlsCfg.ClientCAs = clientCAs
-			tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
-		}
+func tlsConfig(crt, key, clientCA string) (*tls.Config, error) {
+	if crt == "" || key == "" {
+		return nil, nil
 	}
+	var err error
+	tlsCfg := &tls.Config{Certificates: make([]tls.Certificate, 1)}
+	tlsCfg.Certificates[0], err = tls.LoadX509KeyPair(crt, key)
+	if err != nil {
+		return nil, err
+	}
+	if clientCA == "" {
+		return tlsCfg, nil
+	}
+	pem, err := os.ReadFile(clientCA)
+	if err != nil {
+		return nil, err
+	}
+	tlsCfg.ClientCAs = x509.NewCertPool()
+	if !tlsCfg.ClientCAs.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("%q not added to certool", clientCA)
+	}
+	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
 	return tlsCfg, nil
 }
 
@@ -316,7 +308,7 @@ func pathConflict(paths ...string) bool {
 			if a == b {
 				return true
 			}
-			if a == "." || b == "." || strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
+			if a == "." || b == "." || strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/") {
 				return true
 			}
 		}

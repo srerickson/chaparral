@@ -11,7 +11,9 @@ import (
 	"github.com/kkyr/fig"
 )
 
-var configFile = flag.String("c", "", "config file")
+var (
+	configFile = flag.String("c", "", "config file")
+)
 
 func main() {
 	ctx := context.Background()

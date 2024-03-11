@@ -54,13 +54,13 @@ roots:
 #
 # The "default" permission is used to set base permissions for all users,
 # including un-authenticated requests.
-permissions:
-  default: {} # no access by default
-  roles:
-    # members can read any object in the 'main' storage root
-    chaparral_member:
-      read_object: ["main::*"]
+# permissions:
+#   default: {} # no access by default
+#   roles:
+#     # members can read any object in the 'main' storage root
+#     chaparral_member:
+#       read_object: ["main::*"]
 
-    # admins can do any action to any resource
-    chaparral_admin: 
-      "*": ["*::*"]
+#     # admins can do any action to any resource
+#     chaparral_admin: 
+#       "*": ["*::*"]
