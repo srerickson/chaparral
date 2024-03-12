@@ -28,27 +28,26 @@ service CommitService {
 }
 
 
+// CommitRequest is used to create or update OCFL objects.
 message CommitRequest{
     // storage_root_id is the id of the storage root for the object to create/update
     string storage_root_id = 1;
     // object_id is the id for the object to create/update
     string object_id = 2;
-    // version is used to set the expected number for the new version. If set to 0,
-    // the HEAD+1 is assumed.
+    // version is used to set the expected number for the newly created object
+    // version. Use 0 to not require a particular version.
     int32 version = 3;
-    // User information for the commit. The user name and email are saved with
-    // the new object version.
+    // User name and email saved with the new object version.
     User user = 4;
-    // Commit message. The message is saved with the new object version.
+    // The message saved with the new object version.
     string message = 5;
     // state is a map of paths to digests using digest_algorithm
     map<string,string> state = 6;
-    // digest_algorithm is the id for the digest algorithm used in state. It 
-    // must be 'sha512' or 'sha256'
+    // the digest algorithm used in state. It must be 'sha512' or 'sha256'
     string digest_algorithm = 7;
-   // content source is used to set the location where new content for the
-   // commit is stored.
-
+    // content sources is a list of places (ContentSourceItems) where new
+    // content referred to  in state can be found. Content sources can be
+    // uploaders or existing objects.
     repeated ContentSourceItem content_sources = 8;
 
     message ContentSourceItem {
@@ -68,6 +67,7 @@ message CommitRequest{
     }
 }
 
+// CommitResponse represents a successful commit
 message CommitResponse{}
 
 
@@ -79,8 +79,9 @@ message DeleteObjectRequest{
 
 message DeleteObjectResponse{}
 
-// NewUploaderRequest is used to create new uploaders where files can be
-// uploaded.
+// NewUploaderRequest is used to create an uploader, which is a namespace for
+// uploading files. Files uploaded to the uploader are digested as they are
+// received using one or more digest algorithms (must include sha512 or sha256).
 message NewUploaderRequest{
     // a list of digest algorithms use to digest files uploaded to the uploader.
     // The list must include `sha512` or `sha256`. 
@@ -89,6 +90,7 @@ message NewUploaderRequest{
     string description = 2; 
 }
 
+// NewUploaderResponse represents a newly created  uploader.
 message NewUploaderResponse{
     string uploader_id = 1;
     // algorithm used to digest uploaded data

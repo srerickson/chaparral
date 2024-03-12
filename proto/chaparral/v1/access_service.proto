@@ -17,8 +17,7 @@ service AccessService {
 
 // GetObjectVersionRequest is used to request information about an object's state.
 message GetObjectVersionRequest{
-    // The storage root id for the object to access. If not set, the default
-    // storage root is used.
+    // The storage root id for the object to access.
     string storage_root_id = 1;
     // The object id to access (required).
     string object_id = 2;
@@ -29,8 +28,7 @@ message GetObjectVersionRequest{
 
 // GetObjectVersionResponse represents state for a specific object version.
 message GetObjectVersionResponse {
-    // The object's storage root id. The empty string corresponds to the default
-    // storage root.
+    // The object's storage root id.
     string storage_root_id = 1;
     // The object's id
     string object_id = 2;
@@ -58,8 +56,7 @@ message GetObjectVersionResponse {
 // GetObjectManifestRequest is used to request details about all content files
 // in an object
 message GetObjectManifestRequest{
-    // The storage root id for the object to access. If not set, the default
-    // storage root is used.
+    // The storage root id for the object to access.
     string storage_root_id = 1;
     // The object id to access (required).
     string object_id = 2;
