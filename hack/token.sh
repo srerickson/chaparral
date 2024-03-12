@@ -1,4 +1,4 @@
-PEM_FILE='hack/data/chaparral.pem' # will be created
+PEM_FILE='hack/data/auth.pem'
 USER_ID="1"
 USER_EMAIL="nobody@nothing.never"
 USER_NAME="test user"

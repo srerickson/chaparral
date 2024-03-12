@@ -31,6 +31,12 @@ uploads: "uploads"
 # doesn't exist, it will be created using values in `init`. Additional storage
 # roots can be added, but they need to include a unique, non-empty `id` value.
 roots:
+- id: "public"
+  path: "public"
+  init:
+    description: "public"
+    layout: "0003-hash-and-id-n-tuple-storage-layout"
+
 - id: "main"
   path: "ocfl-default" # path relative to backend (CHAPARRAL_BACKEND)
   init:
@@ -54,13 +60,14 @@ roots:
 #
 # The "default" permission is used to set base permissions for all users,
 # including un-authenticated requests.
-# permissions:
-#   default: {} # no access by default
-#   roles:
-#     # members can read any object in the 'main' storage root
-#     chaparral_member:
-#       read_object: ["main::*"]
+permissions:
+  default:
+    read_object: ["public::*"]
+  roles:
+    # members can read any object in the 'main' storage root
+    chaparral_member:
+      read_object: ["main::*"]
 
-#     # admins can do any action to any resource
-#     chaparral_admin: 
-#       "*": ["*::*"]
+    # admins can do any action to any resource
+    chaparral_admin: 
+      "*": ["*::*"]
