@@ -3,16 +3,18 @@ package backend
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/srerickson/ocfl-go"
-	"github.com/srerickson/ocfl-go/backend/cloud"
 	"github.com/srerickson/ocfl-go/backend/local"
-	"gocloud.dev/blob"
-	_ "gocloud.dev/blob/s3blob"
+	s3ocfl "github.com/srerickson/ocfl-go/backend/s3"
 )
 
 type FileBackend struct {
@@ -46,7 +48,8 @@ func (fb *FileBackend) NewFS() (ocfl.WriteFS, error) {
 
 // supports "s3" and "azure" backend types
 type S3Backend struct {
-	Bucket  string     `json:"bucket"`
+	Bucket  string `json:"bucket"`
+	Logger  *slog.Logger
 	Options url.Values `json:"options"`
 }
 
@@ -57,27 +60,63 @@ func (cb S3Backend) IsAccessible() (bool, error) {
 	timeout := 1 * time.Minute // don't let this hang
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	b, err := cb.bucket()
+	client, err := cb.client(ctx)
 	if err != nil {
 		return false, err
 	}
-	return b.IsAccessible(ctx)
+	_, err = client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+		Bucket:  &cb.Bucket,
+		MaxKeys: aws.Int32(1),
+	})
+	return err == nil, err
 }
 
 func (cb S3Backend) NewFS() (ocfl.WriteFS, error) {
-	bucket, err := cb.bucket()
+	ctx := context.Background()
+	client, err := cb.client(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return cloud.NewFS(bucket), nil
+	return &s3ocfl.BucketFS{
+		S3:     client,
+		Bucket: cb.Bucket,
+		Logger: cb.Logger,
+	}, nil
 }
 
-func (cb S3Backend) bucket() (*blob.Bucket, error) {
-	ctx := context.Background()
-	urlstr := "s3://" + cb.Bucket
-	if len(cb.Options) > 0 {
-		urlstr += "?" + cb.Options.Encode()
-
+func (cb S3Backend) options(key string) string {
+	val := cb.Options[key]
+	if len(val) > 0 {
+		return val[0]
 	}
-	return blob.OpenBucket(ctx, urlstr)
+	return ""
+}
+
+func (cb S3Backend) client(ctx context.Context) (*s3.Client, error) {
+	region := cb.options("region")
+	endpoint := cb.options("endpoint")
+	opts := []func(*config.LoadOptions) error{
+		config.WithDefaultRegion(region),
+	}
+	if endpoint != "" {
+		signingRegion := region
+		if signingRegion == "" {
+			signingRegion = "us-east-1"
+		}
+		customResolver := aws.EndpointResolverWithOptionsFunc(
+			func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+				return aws.Endpoint{
+					PartitionID:       "aws",
+					URL:               endpoint,
+					SigningRegion:     signingRegion,
+					HostnameImmutable: true,
+				}, nil
+			})
+		opts = append(opts, config.WithEndpointResolverWithOptions(customResolver))
+	}
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return s3.NewFromConfig(cfg), nil
 }

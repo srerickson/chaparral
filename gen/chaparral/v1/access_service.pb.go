@@ -27,8 +27,7 @@ type GetObjectVersionRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// The storage root id for the object to access. If not set, the default
-	// storage root is used.
+	// The storage root id for the object to access.
 	StorageRootId string `protobuf:"bytes,1,opt,name=storage_root_id,json=storageRootId,proto3" json:"storage_root_id,omitempty"`
 	// The object id to access (required).
 	ObjectId string `protobuf:"bytes,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
@@ -96,8 +95,7 @@ type GetObjectVersionResponse struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// The object's storage root id. The empty string corresponds to the default
-	// storage root.
+	// The object's storage root id.
 	StorageRootId string `protobuf:"bytes,1,opt,name=storage_root_id,json=storageRootId,proto3" json:"storage_root_id,omitempty"`
 	// The object's id
 	ObjectId string `protobuf:"bytes,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
@@ -230,8 +228,7 @@ type GetObjectManifestRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// The storage root id for the object to access. If not set, the default
-	// storage root is used.
+	// The storage root id for the object to access.
 	StorageRootId string `protobuf:"bytes,1,opt,name=storage_root_id,json=storageRootId,proto3" json:"storage_root_id,omitempty"`
 	// The object id to access (required).
 	ObjectId string `protobuf:"bytes,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`

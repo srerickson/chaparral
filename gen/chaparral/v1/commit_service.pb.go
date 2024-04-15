@@ -21,6 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// CommitRequest is used to create or update OCFL objects.
 type CommitRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -30,20 +31,21 @@ type CommitRequest struct {
 	StorageRootId string `protobuf:"bytes,1,opt,name=storage_root_id,json=storageRootId,proto3" json:"storage_root_id,omitempty"`
 	// object_id is the id for the object to create/update
 	ObjectId string `protobuf:"bytes,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
-	// version is used to set the expected number for the new version. If set to 0,
-	// the HEAD+1 is assumed.
+	// version is used to set the expected number for the newly created object
+	// version. Use 0 to not require a particular version.
 	Version int32 `protobuf:"varint,3,opt,name=version,proto3" json:"version,omitempty"`
-	// User information for the commit. The user name and email are saved with
-	// the new object version.
+	// User name and email saved with the new object version.
 	User *User `protobuf:"bytes,4,opt,name=user,proto3" json:"user,omitempty"`
-	// Commit message. The message is saved with the new object version.
+	// The message saved with the new object version.
 	Message string `protobuf:"bytes,5,opt,name=message,proto3" json:"message,omitempty"`
 	// state is a map of paths to digests using digest_algorithm
 	State map[string]string `protobuf:"bytes,6,rep,name=state,proto3" json:"state,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// digest_algorithm is the id for the digest algorithm used in state. It
-	// must be 'sha512' or 'sha256'
-	DigestAlgorithm string                             `protobuf:"bytes,7,opt,name=digest_algorithm,json=digestAlgorithm,proto3" json:"digest_algorithm,omitempty"`
-	ContentSources  []*CommitRequest_ContentSourceItem `protobuf:"bytes,8,rep,name=content_sources,json=contentSources,proto3" json:"content_sources,omitempty"`
+	// the digest algorithm used in state. It must be 'sha512' or 'sha256'
+	DigestAlgorithm string `protobuf:"bytes,7,opt,name=digest_algorithm,json=digestAlgorithm,proto3" json:"digest_algorithm,omitempty"`
+	// content sources is a list of places (ContentSourceItems) where new
+	// content referred to  in state can be found. Content sources can be
+	// uploaders or existing objects.
+	ContentSources []*CommitRequest_ContentSourceItem `protobuf:"bytes,8,rep,name=content_sources,json=contentSources,proto3" json:"content_sources,omitempty"`
 }
 
 func (x *CommitRequest) Reset() {
@@ -134,6 +136,7 @@ func (x *CommitRequest) GetContentSources() []*CommitRequest_ContentSourceItem {
 	return nil
 }
 
+// CommitResponse represents a successful commit
 type CommitResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -266,8 +269,9 @@ func (*DeleteObjectResponse) Descriptor() ([]byte, []int) {
 	return file_chaparral_v1_commit_service_proto_rawDescGZIP(), []int{3}
 }
 
-// NewUploaderRequest is used to create new uploaders where files can be
-// uploaded.
+// NewUploaderRequest is used to create an uploader, which is a namespace for
+// uploading files. Files uploaded to the uploader are digested as they are
+// received using one or more digest algorithms (must include sha512 or sha256).
 type NewUploaderRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -326,6 +330,7 @@ func (x *NewUploaderRequest) GetDescription() string {
 	return ""
 }
 
+// NewUploaderResponse represents a newly created  uploader.
 type NewUploaderResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
