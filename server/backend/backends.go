@@ -84,17 +84,9 @@ func (cb S3Backend) NewFS() (ocfl.WriteFS, error) {
 	}, nil
 }
 
-func (cb S3Backend) options(key string) string {
-	val := cb.Options[key]
-	if len(val) > 0 {
-		return val[0]
-	}
-	return ""
-}
-
 func (cb S3Backend) client(ctx context.Context) (*s3.Client, error) {
-	region := cb.options("region")
-	endpoint := cb.options("endpoint")
+	region := cb.option("region")
+	endpoint := cb.option("endpoint")
 	opts := []func(*config.LoadOptions) error{
 		config.WithDefaultRegion(region),
 	}
@@ -119,4 +111,12 @@ func (cb S3Backend) client(ctx context.Context) (*s3.Client, error) {
 		return nil, err
 	}
 	return s3.NewFromConfig(cfg), nil
+}
+
+func (cb S3Backend) option(key string) string {
+	val := cb.Options[key]
+	if len(val) > 0 {
+		return val[0]
+	}
+	return ""
 }

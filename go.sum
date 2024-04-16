@@ -346,6 +346,8 @@ github.com/srerickson/ocfl-go v0.0.23 h1:04j2M8XK4gmfSDRKIqAuYnECoY4/vXPOqT3ZfAw
 github.com/srerickson/ocfl-go v0.0.23/go.mod h1:iwrEtWmNIcELJNVPy8U1Pc/ci/HtY7qtZy/x7NfgN1k=
 github.com/srerickson/ocfl-go v0.0.24 h1:j2Cfrz5bJxKBWpH9zAtBHcJjwjpYSok8IWJvKfj7N3k=
 github.com/srerickson/ocfl-go v0.0.24/go.mod h1:LPLz3ydpouaUG49nBeZUYh87AZDcHJw6TCo+Zg5Juls=
+github.com/srerickson/ocfl-go v0.0.25 h1:jB9tP4spj7e6QydykNX3XOsa/Wclr6UYjYoeCA2BywY=
+github.com/srerickson/ocfl-go v0.0.25/go.mod h1:LPLz3ydpouaUG49nBeZUYh87AZDcHJw6TCo+Zg5Juls=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
 github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
@@ -404,6 +406,8 @@ golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 h1:LfspQV/FYTatPTr/3HzIcmiUF
 golang.org/x/exp v0.0.0-20240222234643-814bf88cf225/go.mod h1:CxmFvTBINI24O/j8iY7H1xHzx2i4OsyguNBmN/uPtqc=
 golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8 h1:ESSUROHIBHg7USnszlcdmjBEwdMj9VUvU+OPk4yl2mc=
 golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8/go.mod h1:/lliqkxwWAhPjf5oSOIJup2XcqJaw8RGS6k3TGEc7GI=
+golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f h1:99ci1mjWVBWwJiEKYY6jWa4d2nTQVIEhZIptnrVb1XY=
+golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f/go.mod h1:/lliqkxwWAhPjf5oSOIJup2XcqJaw8RGS6k3TGEc7GI=
 golang.org/x/lint v0.0.0-20181026193005-c67002cb31c3/go.mod h1:UVdnD1Gm6xHRNCYTkRU2/jEulfH38KcIWyp/GAMgvoE=
 golang.org/x/lint v0.0.0-20190227174305-5b3e6a55c961/go.mod h1:wehouNa3lNwaWXcvxsM5YxQ5yQlVC4a0KAMCusXpPoU=
 golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3/go.mod h1:6SW0HCj/g11FgYtHlgUYUwCkIfeOF89ocIRzGO/8vkc=

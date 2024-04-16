@@ -87,12 +87,10 @@ func Run(ctx context.Context, conf *Config) error {
 	chapDB := (*chapdb.SQLiteDB)(db)
 
 	logger.Debug("initializing backend...", "config", conf.Backend)
-
-	fsys, err := newBackend(conf.Backend)
+	fsys, err := newBackend(conf.Backend, logger.Logger)
 	if err != nil {
 		return err
 	}
-
 	var rootPaths []string
 	var roots []*store.StorageRoot
 	for _, rootConfig := range conf.Roots {
@@ -208,18 +206,21 @@ func Run(ctx context.Context, conf *Config) error {
 	return srvErr
 }
 
-func newBackend(storage string) (ocfl.WriteFS, error) {
+func newBackend(storage string, logger *slog.Logger) (ocfl.WriteFS, error) {
 	var b interface {
 		IsAccessible() (bool, error)
 		NewFS() (ocfl.WriteFS, error)
 	}
-	kind, loc, _ := strings.Cut(storage, "://")
+	kind, configStr, _ := strings.Cut(storage, "://")
 	switch kind {
 	case "file":
-		b = &backend.FileBackend{Path: loc}
+		b = &backend.FileBackend{Path: configStr}
 	case "s3":
-		bucket, query, _ := strings.Cut(loc, "?")
-		s3back := &backend.S3Backend{Bucket: bucket}
+		bucket, query, _ := strings.Cut(configStr, "?")
+		s3back := &backend.S3Backend{
+			Bucket: bucket,
+			Logger: logger,
+		}
 		if query != "" {
 			opts, err := url.ParseQuery(query)
 			if err != nil {

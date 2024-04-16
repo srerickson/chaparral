@@ -12,10 +12,10 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/kkyr/fig v0.4.0
 	github.com/pressly/goose/v3 v3.19.2
-	github.com/srerickson/ocfl-go v0.0.24
+	github.com/srerickson/ocfl-go v0.0.25
 	gocloud.dev v0.37.0
 	golang.org/x/crypto v0.22.0
-	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8
+	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/net v0.24.0
 	google.golang.org/protobuf v1.33.0
 	modernc.org/sqlite v1.29.6
