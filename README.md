@@ -29,6 +29,22 @@ Images are built with `ko`
  VERSION=0.x.y KO_DOCKER_REPO=srerickson ko -B build ./cmd/chaparral
 ```
 
+## Authorization
+
+Chaparral can use signed web tokens for authentication by setting the
+`CHAPARRAL_PUBKEY_FILE` environment variable or the `pubkey_file` config value
+to the path of a PEM-encoded RSA public key.
+
+Generate a new RSA key pair:
+
+```sh
+# generate a new key
+$ openssl genrsa -out auth.pem 2048
+
+# export public key
+$openssl pkey -in auth.pem -pubout > auth-pub.pem
+```
+
 ## About the name
 
 > Chaparral is a shrubland plant community found primarily in California, in
