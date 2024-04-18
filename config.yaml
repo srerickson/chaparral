@@ -14,7 +14,7 @@
 # backend: file://.
 #
 # S3 example:
-# backend: s3://ocfl-bucket?region=us-west-2
+# backend: s3://ocfl?region=us-west-2
 
 
 # Upload path
@@ -26,19 +26,20 @@ uploads: "uploads"
 
 # Sorage Root config
 #
-# Multiple OCFL storage roots can be configured. Here the default storage root
-# path is set to `ocfl-default` (relative to the backend). If the storage root
-# doesn't exist, it will be created using values in `init`. Additional storage
-# roots can be added, but they need to include a unique, non-empty `id` value.
+# Multiple OCFL storage roots can be configured. If the storage root
+# doesn't exist, it will be created using values in `init`.
 roots:
-- id: "public"
-  path: "public"
+- id: "public" # id used in requests to refer to the storage root
+  path: "public" # path relative to backend (CHAPARRAL_BACKEN)
   init:
     description: "public"
     layout: "0003-hash-and-id-n-tuple-storage-layout"
 
-- id: "main"
-  path: "ocfl-default" # path relative to backend (CHAPARRAL_BACKEND)
+- id: restricted
+  path: restricted
+
+- id: "working"
+  path: "working" # path relative to backend (CHAPARRAL_BACKEND)
   init:
     # if the storage doesn't exist it will be created with 
     # these options
@@ -64,9 +65,9 @@ permissions:
   default:
     read_object: ["public::*"]
   roles:
-    # members can read any object in the 'main' storage root
+    # members can read any object in the 'restricted' storage root
     chaparral_member:
-      read_object: ["main::*"]
+      read_object: ["restricted::*"]
 
     # admins can do any action to any resource
     chaparral_admin: 

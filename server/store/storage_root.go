@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	defaultSpec   = ocfl.Spec{1, 1}
+	defaultSpec   = ocfl.Spec1_1
 	defaultLayout = extension.Ext0002().(extension.Layout)
 )
 
@@ -85,7 +85,7 @@ func (store *StorageRoot) Description() string {
 // store returns the version of the OCFL specification useb by the storage root
 func (store *StorageRoot) Spec() ocfl.Spec {
 	if store.base == nil {
-		return ocfl.Spec{}
+		return ocfl.Spec("")
 	}
 	return store.base.Spec()
 }
@@ -172,7 +172,7 @@ func (store *StorageRoot) GetObjectVersion(ctx context.Context, objectID string,
 				ID:            obj.Inventory.ID,
 			},
 			DigestAlgorithm: obj.Inventory.DigestAlgorithm,
-			Spec:            obj.Inventory.Type.Spec.String(),
+			Spec:            string(obj.Inventory.Type.Spec),
 			Head:            obj.Inventory.Head.Num(),
 			Version:         verIndex,
 			State:           map[string]chaparral.FileInfo{},
@@ -277,7 +277,7 @@ func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error
 		Path:            obj.Path,
 		DigestAlgorithm: obj.Inventory.DigestAlgorithm,
 		Manifest:        chaparral.Manifest{},
-		Spec:            obj.Inventory.Type.Spec.String(),
+		Spec:            string(obj.Inventory.Type.Spec),
 	}
 	for d, paths := range obj.Inventory.Manifest {
 		paths = slices.Clone(paths)
