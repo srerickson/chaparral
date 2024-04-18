@@ -25,20 +25,20 @@ import (
 	"github.com/srerickson/ocfl-go/extension"
 )
 
-const TestStoreID = "test"
-
-var (
-	s3Env     = "CHAPARRAL_TEST_S3"
-	storeConf = store.StorageRootInitializer{
-		Description: "test store",
-		Layout:      extension.Ext0003().Name(),
-	}
+const (
+	s3Env       = "CHAPARRAL_TEST_S3"
+	TestStoreID = "test"
 )
+
+var storeConf = store.StorageRootInitializer{
+	Description: "test store",
+	Layout:      extension.Ext0003().Name(),
+}
 
 type ServiceTestFunc func(t *testing.T, cli *http.Client, url string)
 
 func RunServiceTest(t *testing.T, tests ...ServiceTestFunc) {
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+	logger := slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))
 	opts := []server.Option{
