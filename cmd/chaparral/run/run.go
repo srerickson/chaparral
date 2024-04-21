@@ -26,6 +26,7 @@ import (
 	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/chaparral/server/uploader"
 	"github.com/srerickson/ocfl-go"
+	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
@@ -40,10 +41,41 @@ type Config struct {
 	DB          string                 `fig:"db" default:"/tmp/chaparral.sqlite3"`
 	PubkeyFile  string                 `fig:"pubkey_file"`
 	Pubkey      string                 `fig:"pubkey"`
+	AutoCert    *AutoCertConfig        `fix:"autocert"`
 	TLSCert     string                 `fig:"tls_cert"`
 	TLSKey      string                 `fig:"tls_key"`
 	Debug       bool                   `fig:"debug"`
 	Permissions server.RolePermissions `fig:"permissions"`
+}
+
+func (c *Config) tlsConfig() (*tls.Config, error) {
+	switch {
+	case c.AutoCert != nil:
+		if err := os.MkdirAll(c.AutoCert.Dir, 0700); err != nil {
+			return nil, err
+		}
+		manager := autocert.Manager{
+			Cache:      autocert.DirCache(c.AutoCert.Dir),
+			Email:      c.AutoCert.Email,
+			HostPolicy: autocert.HostWhitelist(c.AutoCert.Domain),
+		}
+		return manager.TLSConfig(), nil
+	case c.TLSCert != "" && c.TLSKey != "":
+		cert, err := tls.LoadX509KeyPair(c.TLSCert, c.TLSKey)
+		if err != nil {
+			return nil, err
+		}
+		return &tls.Config{Certificates: []tls.Certificate{cert}}, nil
+	default:
+		return nil, nil
+	}
+}
+
+type AutoCertConfig struct {
+	Domain string
+	Email  string
+	// Directory for storing certificates
+	Dir string `fig:"dir" default:"~/.cache/golang-autocert"`
 }
 
 type Root struct {
@@ -161,14 +193,9 @@ func Run(ctx context.Context, conf *Config) error {
 	// mux.Mount(grpcreflect.NewHandlerV1(reflector))
 	// mux.Mount(grpcreflect.NewHandlerV1Alpha(reflector))
 
-	logger.Debug("TLS config", "cert", conf.TLSCert, "key", conf.TLSKey)
-	tlsCfg, err := tlsConfig(conf.TLSCert, conf.TLSKey, "")
-	if err != nil {
+	httpSrv := http.Server{Addr: conf.Listen}
+	if httpSrv.TLSConfig, err = conf.tlsConfig(); err != nil {
 		return fmt.Errorf("TLS config errors: %w", err)
-	}
-	httpSrv := http.Server{
-		Addr:      conf.Listen,
-		TLSConfig: tlsCfg,
 	}
 
 	// handle shutdown
@@ -190,13 +217,14 @@ func Run(ctx context.Context, conf *Config) error {
 		}
 	}()
 
-	logger.Info("starting server", "listen", conf.Listen, "h2c", tlsCfg == nil)
 	var srvErr error
 	switch {
 	case httpSrv.TLSConfig != nil:
+		logger.Info("starting server", "listen", conf.Listen, "tls", true)
 		httpSrv.Handler = mux
 		srvErr = httpSrv.ListenAndServeTLS("", "")
 	default:
+		logger.Info("starting server", "listen", conf.Listen, "tls", false)
 		httpSrv.Handler = h2c.NewHandler(mux, &http2.Server{})
 		srvErr = httpSrv.ListenAndServe()
 	}
@@ -276,31 +304,6 @@ func genRSAKey(name string) error {
 		Type:  "PRIVATE KEY",
 		Bytes: keyBytes,
 	})
-}
-
-func tlsConfig(crt, key, clientCA string) (*tls.Config, error) {
-	if crt == "" || key == "" {
-		return nil, nil
-	}
-	var err error
-	tlsCfg := &tls.Config{Certificates: make([]tls.Certificate, 1)}
-	tlsCfg.Certificates[0], err = tls.LoadX509KeyPair(crt, key)
-	if err != nil {
-		return nil, err
-	}
-	if clientCA == "" {
-		return tlsCfg, nil
-	}
-	pem, err := os.ReadFile(clientCA)
-	if err != nil {
-		return nil, err
-	}
-	tlsCfg.ClientCAs = x509.NewCertPool()
-	if !tlsCfg.ClientCAs.AppendCertsFromPEM(pem) {
-		return nil, fmt.Errorf("%q not added to certool", clientCA)
-	}
-	tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
-	return tlsCfg, nil
 }
 
 func pathConflict(paths ...string) bool {
