@@ -58,6 +58,7 @@ func (c *Config) tlsConfig() (*tls.Config, error) {
 			Cache:      autocert.DirCache(c.AutoCert.Dir),
 			Email:      c.AutoCert.Email,
 			HostPolicy: autocert.HostWhitelist(c.AutoCert.Domain),
+			Prompt:     autocert.AcceptTOS,
 		}
 		return manager.TLSConfig(), nil
 	case c.TLSCert != "" && c.TLSKey != "":
@@ -72,10 +73,9 @@ func (c *Config) tlsConfig() (*tls.Config, error) {
 }
 
 type AutoCertConfig struct {
-	Domain string
-	Email  string
-	// Directory for storing certificates
-	Dir string `fig:"dir" default:"~/.cache/golang-autocert"`
+	Domain string `fig:"domain"`
+	Email  string `fig:"email"`
+	Dir    string `fig:"dir"`
 }
 
 type Root struct {
