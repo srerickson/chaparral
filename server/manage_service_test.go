@@ -5,4 +5,4 @@ import (
 	"github.com/srerickson/chaparral/server"
 )
 
-var _ chaparralv1connect.ManagementServiceHandler = (*server.ManagementService)(nil)
+var _ chaparralv1connect.ManageServiceHandler = (*server.ManageService)(nil)

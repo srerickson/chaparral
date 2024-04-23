@@ -23,7 +23,7 @@ type AccessService struct {
 }
 
 func (s *AccessService) Handler() (string, http.Handler) {
-	// Unlike CommiService, AccessService authorization checks
+	// Unlike CommitService, AccessService authorization checks
 	// are handled in the hander functions.
 	route, handle := chaparralv1connect.NewAccessServiceHandler(s)
 	fn := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +47,7 @@ func (s *AccessService) GetObjectVersion(ctx context.Context, req *connect.Reque
 		err := errors.New("you don't have permission to read from the storage root")
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-	store, err := s.storageRoot(req.Msg.StorageRootId)
+	store, err := s.StorageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -94,7 +94,7 @@ func (s *AccessService) GetObjectManifest(ctx context.Context, req *connect.Requ
 		err := errors.New("you don't have permission to read from the storage root")
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
-	store, err := s.storageRoot(req.Msg.StorageRootId)
+	store, err := s.StorageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
@@ -161,7 +161,7 @@ func (srv *AccessService) DownloadHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	root, err := srv.storageRoot(storeID)
+	root, err := srv.StorageRoot(storeID)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return

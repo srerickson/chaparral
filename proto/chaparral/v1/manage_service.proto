@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package chaparral.v1;
+
+// ManageService provides RPCs used for administering OCFL storage roots
+// and other Chaparral services.
+service ManageService {
+  // StreamObjectRoots scans an OCFL storage root and returns a stream
+  // of OCFL oobject root details to the caller.
+  rpc StreamObjectRoots(StreamObjectRootsRequest) returns (stream StreamObjectRootsResponse) {}
+}
+
+// StreamObjectRootsRequest is used to scan an OCFL storage root for objects.
+message StreamObjectRootsRequest {
+  string storage_root_id = 1;
+}
+
+// StreamObjectRootsResponse is used to return OCFL object information during a
+// scan of an OCFL storage root.i
+message StreamObjectRootsResponse {
+  // path of the object root OCFL object.
+  string object_path = 1;
+  // the OCFL spec declarated in the objec root
+  string spec = 2;
+  // The digest algorithm used for inventory sidecar
+  string digest_algorithm = 3;
+}

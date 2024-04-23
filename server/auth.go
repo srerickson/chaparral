@@ -22,6 +22,7 @@ const (
 	ActionReadObject   = "read_object"
 	ActionCommitObject = "commit_object"
 	ActionDeleteObject = "delete_object"
+	ActionAdminister   = "administer"
 
 	permSep = "::"
 )

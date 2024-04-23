@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -9,20 +10,6 @@ import (
 	"github.com/srerickson/chaparral/server/store"
 	"github.com/srerickson/chaparral/server/uploader"
 )
-
-// chaparral represents complete chaparral server state.
-type chaparral struct {
-	roots     map[string]*store.StorageRoot
-	auth      Authorizer
-	uploadMgr *uploader.Manager
-}
-
-type config struct {
-	chaparral
-	middleware chi.Middlewares
-	logger     *slog.Logger
-	authFunc   AuthUserFunc
-}
 
 // New returns a server mux with registered handlers for access and commit
 // services.
@@ -43,11 +30,19 @@ func New(opts ...Option) *chi.Mux {
 	}
 	mux.Mount(cfg.chaparral.CommitServiceHandler())
 	mux.Mount(cfg.chaparral.AccessServiceHandler())
+	mux.Mount(cfg.chaparral.ManageServiceHandler())
 	return mux
 }
 
 // Option is used to configure the server mux created with New
 type Option func(*config)
+
+type config struct {
+	chaparral
+	middleware chi.Middlewares
+	logger     *slog.Logger
+	authFunc   AuthUserFunc
+}
 
 func WithStorageRoots(roots ...*store.StorageRoot) Option {
 	return func(c *config) {
@@ -101,14 +96,32 @@ func (c *chaparral) CommitServiceHandler() (string, http.Handler) {
 	return (&CommitService{chaparral: c}).Handler()
 }
 
+func (c *chaparral) ManageServiceHandler() (string, http.Handler) {
+	return (&ManageService{chaparral: c}).Handler()
+}
+
 // close any resource created with New().
 func (c *chaparral) Close() error {
 	return nil
 }
 
-func (c *chaparral) storageRoot(id string) (*store.StorageRoot, error) {
+// chaparral represents complete chaparral server state.
+type chaparral struct {
+	roots     map[string]*store.StorageRoot
+	auth      Authorizer
+	uploadMgr *uploader.Manager
+}
+
+func (c *chaparral) StorageRoot(id string) (*store.StorageRoot, error) {
 	if r := c.roots[id]; r != nil {
 		return r, nil
 	}
 	return nil, fmt.Errorf("unknown storage root: %q", id)
+}
+
+func (c *chaparral) Allowed(ctx context.Context, act, resource string) bool {
+	if c.auth == nil {
+		return true
+	}
+	return c.auth.Allowed(ctx, act, resource)
 }

@@ -55,7 +55,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 		chap.QueryObjectID, req.Msg.ObjectId,
 		"user_id", authUser.ID,
 	)
-	store, err := s.storageRoot(req.Msg.StorageRootId)
+	store, err := s.StorageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -142,7 +142,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 				err := errors.New("can't use self as object content source")
 				return nil, connect.NewError(connect.CodeInvalidArgument, err)
 			}
-			srcStore, err := s.storageRoot(src.Object.StorageRootId)
+			srcStore, err := s.StorageRoot(src.Object.StorageRootId)
 			if err != nil {
 				err := fmt.Errorf("unknown storage root for source object state: %s", src.Object.StorageRootId)
 				return nil, connect.NewError(connect.CodeNotFound, err)
@@ -186,7 +186,7 @@ func (s *CommitService) Commit(ctx context.Context, req *connect.Request[chaparr
 
 // DeleteObject permanently deletes an existing OCFL object.
 func (s *CommitService) DeleteObject(ctx context.Context, req *connect.Request[chaparralv1.DeleteObjectRequest]) (*connect.Response[chaparralv1.DeleteObjectResponse], error) {
-	store, err := s.storageRoot(req.Msg.StorageRootId)
+	store, err := s.StorageRoot(req.Msg.StorageRootId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
