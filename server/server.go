@@ -97,7 +97,7 @@ func (c *chaparral) CommitServiceHandler() (string, http.Handler) {
 }
 
 func (c *chaparral) ManageServiceHandler() (string, http.Handler) {
-	return (&ManageService{chaparral: c}).Handler()
+	return (&ManageService{ManageServiceAPI: c}).Handler()
 }
 
 // close any resource created with New().

@@ -146,13 +146,14 @@ func (r RolePermissions) Allowed(ctx context.Context, action string, resource st
 	if r.Default.allow(action, resource) {
 		return true
 	}
-	return slices.ContainsFunc(user.Roles, func(role string) bool {
+	roleAllows := func(role string) bool {
 		perm, ok := r.Roles[role]
 		if !ok {
 			return false
 		}
 		return perm.allow(action, resource)
-	})
+	}
+	return slices.ContainsFunc(user.Roles, roleAllows)
 }
 
 // Permissions maps actions to resources for which the action is allowed.
@@ -160,10 +161,11 @@ type Permissions map[string][]string
 
 func (p Permissions) allow(action string, resource string) bool {
 	for _, act := range []string{action, "*"} {
-		ok := slices.ContainsFunc(p[act], func(okResource string) bool {
-			return resousrceMatch(resource, okResource)
-		})
-		if ok {
+		allowedResources := p[act]
+		checkInput := func(allowedResource string) bool {
+			return resousrceMatch(resource, allowedResource)
+		}
+		if slices.ContainsFunc(allowedResources, checkInput) {
 			return true
 		}
 	}
