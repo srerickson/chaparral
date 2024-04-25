@@ -10,12 +10,13 @@ import (
 )
 
 type Object struct {
-	ID      int64
-	StoreID string
-	OcflID  string
-	Path    string
-	Alg     string
-	Spec    string
+	ID        int64
+	StoreID   string
+	OcflID    string
+	Path      string
+	Alg       string
+	Spec      string
+	IndexedAt time.Time
 }
 
 type ObjectContent struct {
@@ -24,6 +25,16 @@ type ObjectContent struct {
 	Paths    []byte
 	Fixity   []byte
 	Size     int64
+}
+
+type ObjectError struct {
+	ID            int64
+	StoreID       string
+	Path          string
+	OcflID        string
+	OcflIDMissing bool
+	Error         string
+	ReportedAt    time.Time
 }
 
 type Upload struct {

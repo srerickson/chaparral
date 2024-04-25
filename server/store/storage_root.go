@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"path"
 	"slices"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/srerickson/chaparral"
 	"github.com/srerickson/chaparral/server/internal/lock"
@@ -16,6 +16,7 @@ import (
 	"github.com/srerickson/ocfl-go/extension"
 	"github.com/srerickson/ocfl-go/ocflv1"
 	"github.com/srerickson/ocfl-go/validation"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -46,6 +47,7 @@ type ObjectCache interface {
 	SetObjectManifest(ctx context.Context, m *chaparral.ObjectManifest) error
 	GetObjectManifest(ctx context.Context, storeID string, objID string) (*chaparral.ObjectManifest, error)
 	DeleteObject(ctx context.Context, storeID string, objID string) error
+	DeleteStaleObjects(ctx context.Context, storeID string, olderThan time.Time) error
 }
 
 // StorageRootInitializer is used to configure new storage roots that don't exist
@@ -252,31 +254,20 @@ func (store *StorageRoot) getObjectManifest(ctx context.Context, objectID string
 	if err != nil {
 		return nil, err
 	}
-	if err := store.syncObjectByPath(ctx, pth); err != nil {
+	if err := store.syncObject(ctx, pth); err != nil {
 		return nil, err
 	}
 	return store.cache.GetObjectManifest(ctx, store.id, objectID)
 }
 
-func (store *StorageRoot) SyncObject(ctx context.Context, objectID string) error {
+func (store *StorageRoot) IndexObject(ctx context.Context, objectID string) error {
 	if err := store.Ready(ctx); err != nil {
 		return err
 	}
-	objPath, err := store.base.ResolveID(objectID)
-	if err != nil {
-		return err
-	}
-	return store.syncObjectByPath(ctx, objPath)
+	return store.syncObject(ctx, objectID)
 }
 
-func (store *StorageRoot) SyncObjectPath(ctx context.Context, objectPath string) error {
-	if err := store.Ready(ctx); err != nil {
-		return err
-	}
-	return store.syncObjectByPath(ctx, objectPath)
-}
-
-func (store *StorageRoot) syncObjectByPath(ctx context.Context, objectPath string) error {
+func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error {
 	getInflight := func(key string) (*sync.WaitGroup, bool) {
 		store.syncWaitGroupsMx.Lock()
 		defer store.syncWaitGroupsMx.Unlock()
@@ -289,7 +280,7 @@ func (store *StorageRoot) syncObjectByPath(ctx context.Context, objectPath strin
 		store.syncWaitGroups[key] = wg
 		return wg, false
 	}
-	wg, inflight := getInflight(objectPath)
+	wg, inflight := getInflight(objectID)
 	if inflight {
 		// wait for an active sync request that has yet to complete
 		wg.Wait()
@@ -301,13 +292,12 @@ func (store *StorageRoot) syncObjectByPath(ctx context.Context, objectPath strin
 		delete(store.syncWaitGroups, key)
 		wg.Done()
 		store.syncWaitGroupsMx.Unlock()
-	}(objectPath, wg)
+	}(objectID, wg)
 	// fetch object state
-	obj, err := store.base.GetObjectPath(ctx, objectPath)
+	obj, err := store.base.GetObject(ctx, objectID)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			// objcet doesn't exist
-			store.cache.DeleteObject()
+		if errors.Is(err, ocfl.ErrNoNamaste) {
+			return store.cache.DeleteObject(ctx, store.id, objectID)
 		}
 		return err
 	}
@@ -351,7 +341,7 @@ func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *oc
 		}
 		return err
 	}
-	if err := store.syncObjectByPath(ctx, objectID); err != nil {
+	if err := store.syncObject(ctx, objectID); err != nil {
 		return fmt.Errorf("while syncing object, post-commit: %w", err)
 	}
 	return nil
@@ -375,6 +365,46 @@ func (store *StorageRoot) DeleteObject(ctx context.Context, objectID string) err
 	}
 	if err := store.cache.DeleteObject(ctx, store.id, objectID); err != nil {
 		return fmt.Errorf("clearing cache: %w", err)
+	}
+	return nil
+}
+
+func (store *StorageRoot) Reindex(ctx context.Context) error {
+	errgro, ctx := errgroup.WithContext(ctx)
+	errgro.SetLimit(4) // todo configuration option
+	start := time.Now()
+	eachObjectRoot := func(objRoot *ocfl.ObjectRoot) error {
+		errgro.Go(func() error {
+			obj := ocflv1.Object{ObjectRoot: *objRoot}
+			// TODO handle errors
+			_ = obj.SyncInventory(ctx)
+			man := &chaparral.ObjectManifest{
+				ObjectRef: chaparral.ObjectRef{
+					StorageRootID: store.id,
+					ID:            obj.Inventory.ID,
+				},
+				Path:            obj.Path,
+				DigestAlgorithm: obj.Inventory.DigestAlgorithm,
+				Manifest:        chaparral.Manifest{},
+				Spec:            string(obj.Inventory.Type.Spec),
+			}
+			for d, paths := range obj.Inventory.Manifest {
+				paths = slices.Clone(paths)
+				sort.Strings(paths)
+				man.Manifest[d] = chaparral.FileInfo{
+					Paths:  paths,
+					Fixity: obj.Inventory.GetFixity(d),
+				}
+			}
+			return store.cache.SetObjectManifest(ctx, man)
+		})
+		return nil
+	}
+	if err := ocfl.ObjectRoots(ctx, store.fs, ocfl.Dir(store.path), eachObjectRoot); err != nil {
+		return err
+	}
+	if err := store.cache.DeleteStaleObjects(ctx, store.id, start); err != nil {
+		return err
 	}
 	return nil
 }

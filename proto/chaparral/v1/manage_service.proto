@@ -5,44 +5,33 @@ package chaparral.v1;
 // ManageService provides RPCs used for administering OCFL storage roots
 // and other Chaparral services.
 service ManageService {
-  // StreamObjectRoots scans an OCFL storage root and returns a stream
-  // of OCFL oobject root details to the caller.
-  rpc StreamObjectRoots(StreamObjectRootsRequest) returns (stream StreamObjectRootsResponse) {}
-  
-  // SyncObject updates chaparral's internal metadata index to reflect the
+  // IndexObject updates chaparral's internal metadata index to reflect the
   // actual state of an OCFL object. If the object is not found, any
   // references to object in the index is removed.
-  rpc SyncObject(SyncObjectRequest) returns (SyncObjectResponse) {}
+  rpc IndexObject(IndexObjectRequest) returns (IndexObjectResponse) {}
+  // IndexStorageRoot finds all objects in an OCFL storage root
+  // and updates chaparral's internal metadata index. The indexing
+  // process is asynchronous. The request returns immediately.
+  rpc IndexStorageRoot(IndexStorageRootRequest) returns (IndexStorageRootResponse) {}
+  
 }
 
-// StreamObjectRootsRequest is used to scan an OCFL storage root for objects.
-message StreamObjectRootsRequest {
-  string storage_root_id = 1;
-}
-
-// StreamObjectRootsResponse is used to return OCFL object information during a
-// scan of an OCFL storage root.i
-message StreamObjectRootsResponse {
-  // path of the object root OCFL object.
-  string object_path = 1;
-  // the OCFL spec declarated in the objec root
-  string spec = 2;
-  // The digest algorithm used for inventory sidecar
-  string digest_algorithm = 3;
-}
-
-// SyncObjectRequest is a request to update chapparal's internal
+// IndexObjectRequest is a request to update chapparal's internal
 // metadata index for a given object
-message SyncObjectRequest {
+message IndexObjectRequest {
   // the storage root for the object to sync
   string storage_root_id = 1;
-  // the object_id for the objec to sync. (Conflicts with object_path. If both
-  // are set, object_id is used.)
+  // the object_id for the objec to sync.
   string object_id = 2;
-  // the object_path for the object to sync. (Conflicts with object_id. If both
-  // are set, object_id is used.)
-  string object_path = 3;
 }
 
-// SyncObjectResponse is a response from the SyncObject rpc.
-message SyncObjectResponse {}
+// IndexObjectResponse is a response from the IndexObject rpc.
+message IndexObjectResponse {}
+
+// IndexStorageRootRequest
+message IndexStorageRootRequest{
+  string storage_root_id = 1;
+}
+
+// IndexStorageRootResponse
+message IndexStorageRootResponse {}

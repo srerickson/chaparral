@@ -1,4 +1,4 @@
-SQLC='sqlc/sqlc:1.25.0'
+SQLC='sqlc/sqlc:1.26.0'
 BUF='bufbuild/buf:1.28.1'
 CONTAINER_BIN=docker
 RUN_CONTAINER=$(CONTAINER_BIN) run --rm --security-opt label=disable

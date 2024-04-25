@@ -1,3 +1,7 @@
+-- 
+-- Uploaders
+--
+
 -- name: CreateUploader :one
 INSERT INTO uploaders (
     id, 
@@ -8,7 +12,6 @@ INSERT INTO uploaders (
 ) VALUES (
     ?, ?, ?, ?, ?
 ) RETURNING *;
-
 
 -- name: GetUploader :one
 SELECT * FROM uploaders WHERE id = ? LIMIT 1;
@@ -32,16 +35,28 @@ INSERT INTO uploads (
     ?, ?, ?, ?
 ) RETURNING *;
 
-
 -- name: GetUploads :many
 SELECT * FROM uploads WHERE uploader_id = ?;
 
 -- name: DeleteUploads :exec
 DELETE FROM uploads WHERE uploader_id = ?;
 
+--
+-- Objects / ObjectContents
+--
 
 -- name: GetObject :one
 SELECT * FROM objects WHERE store_id = ? AND ocfl_id = ?;
+
+-- name: AllObjects :many
+SELECT * FROM objects WHERE store_id = ? ORDER BY ocfl_id ASC;
+
+-- name: CountObjects :one
+SELECT COUNT(*) FROM objects WHERE store_id = ?;
+
+-- name: ListObjects :many
+SELECT * FROM objects WHERE store_id = ?1 AND ocfl_id > ?2
+    ORDER BY ocfl_id ASC LIMIT ?3;
 
 -- name: CreateObject :one
 INSERT INTO objects (
@@ -49,22 +64,28 @@ INSERT INTO objects (
     ocfl_id,
     path,
     spec,
-    alg
-) VALUES (?1, ?2, ?3, ?4, ?5)
+    alg,
+    indexed_at
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT(store_id, ocfl_id) DO UPDATE SET
     path=?3,
     spec=?4,
-    alg=?5
+    alg=?5,
+    indexed_at=?6
 RETURNING *;
 
 -- name: DeleteObject :exec
 DELETE FROM objects WHERE store_id = ? AND ocfl_id = ?;
 
+-- name: DeleteStaleObjects :exec
+DELETE FROM objects WHERE store_id = ? AND indexed_at < ?;
+
 -- name: GetObjectContent :one
-SELECT * FROM object_contents WHERE object_id = ? AND digest = ?;
+SELECT * FROM object_contents WHERE object_id = ? AND digest = ? LIMIT 1;
 
 -- name: GetObjectContents :many
-SELECT * FROM object_contents WHERE object_id = ?;
+SELECT * FROM object_contents WHERE object_id = ?
+    ORDER BY digest ASC;
 
 -- name: CreateObjectContent :one 
 INSERT INTO object_contents (
@@ -81,6 +102,15 @@ ON CONFLICT(object_id, digest) DO UPDATE SET
 RETURNING *;    
 
 -- name: DeleteObjectContents :exec
-DELETE FROM object_contents WHERE object_id = (
+DELETE FROM object_contents WHERE object_id IN (
     SELECT id FROM objects WHERE store_id = ? AND ocfl_id = ?
+);
+
+-- name: DeleteOrphanedObjectContents :exec
+DELETE FROM object_contents WHERE object_id IN (
+    SELECT object_contents.object_id
+    FROM object_contents
+    LEFT JOIN objects
+    ON objects.id = object_contents.object_id
+    WHERE objects.id is NULL
 );

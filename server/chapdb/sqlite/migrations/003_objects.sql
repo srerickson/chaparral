@@ -1,4 +1,3 @@
-
 -- +goose Up
 CREATE TABLE objects (
     id INTEGER PRIMARY KEY,  -- internal db ID
@@ -19,7 +18,6 @@ CREATE TABLE versions (
     user_name TEXT, -- user name saved with object version
     user_address TEXT, -- user address saved with object version
     created DATETIME NOT NULL, -- create timestamp for object version
-    
     PRIMARY KEY(object_id, num)
 );
 
@@ -29,7 +27,6 @@ CREATE TABLE object_contents (
     paths BLOB NOT NULL, -- array of paths
     fixity BLOB NOT NULL, -- json object with alternate digests {alg: digest}
     size INTEGER NOT NULL, -- may not be available
-    
     PRIMARY KEY(object_id, digest)
 );
 

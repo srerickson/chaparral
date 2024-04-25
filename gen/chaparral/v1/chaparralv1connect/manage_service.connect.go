@@ -33,23 +33,24 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// ManageServiceStreamObjectRootsProcedure is the fully-qualified name of the ManageService's
-	// StreamObjectRoots RPC.
-	ManageServiceStreamObjectRootsProcedure = "/chaparral.v1.ManageService/StreamObjectRoots"
-	// ManageServiceSyncObjectProcedure is the fully-qualified name of the ManageService's SyncObject
+	// ManageServiceIndexObjectProcedure is the fully-qualified name of the ManageService's IndexObject
 	// RPC.
-	ManageServiceSyncObjectProcedure = "/chaparral.v1.ManageService/SyncObject"
+	ManageServiceIndexObjectProcedure = "/chaparral.v1.ManageService/IndexObject"
+	// ManageServiceIndexStorageRootProcedure is the fully-qualified name of the ManageService's
+	// IndexStorageRoot RPC.
+	ManageServiceIndexStorageRootProcedure = "/chaparral.v1.ManageService/IndexStorageRoot"
 )
 
 // ManageServiceClient is a client for the chaparral.v1.ManageService service.
 type ManageServiceClient interface {
-	// StreamObjectRoots scans an OCFL storage root and returns a stream
-	// of OCFL oobject root details to the caller.
-	StreamObjectRoots(context.Context, *connect_go.Request[v1.StreamObjectRootsRequest]) (*connect_go.ServerStreamForClient[v1.StreamObjectRootsResponse], error)
-	// SyncObject updates chaparral's internal metadata index to reflect the
+	// IndexObject updates chaparral's internal metadata index to reflect the
 	// actual state of an OCFL object. If the object is not found, any
 	// references to object in the index is removed.
-	SyncObject(context.Context, *connect_go.Request[v1.SyncObjectRequest]) (*connect_go.Response[v1.SyncObjectResponse], error)
+	IndexObject(context.Context, *connect_go.Request[v1.IndexObjectRequest]) (*connect_go.Response[v1.IndexObjectResponse], error)
+	// IndexStorageRoot finds all objects in an OCFL storage root
+	// and updates chaparral's internal metadata index. The indexing
+	// process is asynchronous. The request returns immediately.
+	IndexStorageRoot(context.Context, *connect_go.Request[v1.IndexStorageRootRequest]) (*connect_go.Response[v1.IndexStorageRootResponse], error)
 }
 
 // NewManageServiceClient constructs a client for the chaparral.v1.ManageService service. By
@@ -62,14 +63,14 @@ type ManageServiceClient interface {
 func NewManageServiceClient(httpClient connect_go.HTTPClient, baseURL string, opts ...connect_go.ClientOption) ManageServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
 	return &manageServiceClient{
-		streamObjectRoots: connect_go.NewClient[v1.StreamObjectRootsRequest, v1.StreamObjectRootsResponse](
+		indexObject: connect_go.NewClient[v1.IndexObjectRequest, v1.IndexObjectResponse](
 			httpClient,
-			baseURL+ManageServiceStreamObjectRootsProcedure,
+			baseURL+ManageServiceIndexObjectProcedure,
 			opts...,
 		),
-		syncObject: connect_go.NewClient[v1.SyncObjectRequest, v1.SyncObjectResponse](
+		indexStorageRoot: connect_go.NewClient[v1.IndexStorageRootRequest, v1.IndexStorageRootResponse](
 			httpClient,
-			baseURL+ManageServiceSyncObjectProcedure,
+			baseURL+ManageServiceIndexStorageRootProcedure,
 			opts...,
 		),
 	}
@@ -77,29 +78,30 @@ func NewManageServiceClient(httpClient connect_go.HTTPClient, baseURL string, op
 
 // manageServiceClient implements ManageServiceClient.
 type manageServiceClient struct {
-	streamObjectRoots *connect_go.Client[v1.StreamObjectRootsRequest, v1.StreamObjectRootsResponse]
-	syncObject        *connect_go.Client[v1.SyncObjectRequest, v1.SyncObjectResponse]
+	indexObject      *connect_go.Client[v1.IndexObjectRequest, v1.IndexObjectResponse]
+	indexStorageRoot *connect_go.Client[v1.IndexStorageRootRequest, v1.IndexStorageRootResponse]
 }
 
-// StreamObjectRoots calls chaparral.v1.ManageService.StreamObjectRoots.
-func (c *manageServiceClient) StreamObjectRoots(ctx context.Context, req *connect_go.Request[v1.StreamObjectRootsRequest]) (*connect_go.ServerStreamForClient[v1.StreamObjectRootsResponse], error) {
-	return c.streamObjectRoots.CallServerStream(ctx, req)
+// IndexObject calls chaparral.v1.ManageService.IndexObject.
+func (c *manageServiceClient) IndexObject(ctx context.Context, req *connect_go.Request[v1.IndexObjectRequest]) (*connect_go.Response[v1.IndexObjectResponse], error) {
+	return c.indexObject.CallUnary(ctx, req)
 }
 
-// SyncObject calls chaparral.v1.ManageService.SyncObject.
-func (c *manageServiceClient) SyncObject(ctx context.Context, req *connect_go.Request[v1.SyncObjectRequest]) (*connect_go.Response[v1.SyncObjectResponse], error) {
-	return c.syncObject.CallUnary(ctx, req)
+// IndexStorageRoot calls chaparral.v1.ManageService.IndexStorageRoot.
+func (c *manageServiceClient) IndexStorageRoot(ctx context.Context, req *connect_go.Request[v1.IndexStorageRootRequest]) (*connect_go.Response[v1.IndexStorageRootResponse], error) {
+	return c.indexStorageRoot.CallUnary(ctx, req)
 }
 
 // ManageServiceHandler is an implementation of the chaparral.v1.ManageService service.
 type ManageServiceHandler interface {
-	// StreamObjectRoots scans an OCFL storage root and returns a stream
-	// of OCFL oobject root details to the caller.
-	StreamObjectRoots(context.Context, *connect_go.Request[v1.StreamObjectRootsRequest], *connect_go.ServerStream[v1.StreamObjectRootsResponse]) error
-	// SyncObject updates chaparral's internal metadata index to reflect the
+	// IndexObject updates chaparral's internal metadata index to reflect the
 	// actual state of an OCFL object. If the object is not found, any
 	// references to object in the index is removed.
-	SyncObject(context.Context, *connect_go.Request[v1.SyncObjectRequest]) (*connect_go.Response[v1.SyncObjectResponse], error)
+	IndexObject(context.Context, *connect_go.Request[v1.IndexObjectRequest]) (*connect_go.Response[v1.IndexObjectResponse], error)
+	// IndexStorageRoot finds all objects in an OCFL storage root
+	// and updates chaparral's internal metadata index. The indexing
+	// process is asynchronous. The request returns immediately.
+	IndexStorageRoot(context.Context, *connect_go.Request[v1.IndexStorageRootRequest]) (*connect_go.Response[v1.IndexStorageRootResponse], error)
 }
 
 // NewManageServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -108,22 +110,22 @@ type ManageServiceHandler interface {
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
 func NewManageServiceHandler(svc ManageServiceHandler, opts ...connect_go.HandlerOption) (string, http.Handler) {
-	manageServiceStreamObjectRootsHandler := connect_go.NewServerStreamHandler(
-		ManageServiceStreamObjectRootsProcedure,
-		svc.StreamObjectRoots,
+	manageServiceIndexObjectHandler := connect_go.NewUnaryHandler(
+		ManageServiceIndexObjectProcedure,
+		svc.IndexObject,
 		opts...,
 	)
-	manageServiceSyncObjectHandler := connect_go.NewUnaryHandler(
-		ManageServiceSyncObjectProcedure,
-		svc.SyncObject,
+	manageServiceIndexStorageRootHandler := connect_go.NewUnaryHandler(
+		ManageServiceIndexStorageRootProcedure,
+		svc.IndexStorageRoot,
 		opts...,
 	)
 	return "/chaparral.v1.ManageService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case ManageServiceStreamObjectRootsProcedure:
-			manageServiceStreamObjectRootsHandler.ServeHTTP(w, r)
-		case ManageServiceSyncObjectProcedure:
-			manageServiceSyncObjectHandler.ServeHTTP(w, r)
+		case ManageServiceIndexObjectProcedure:
+			manageServiceIndexObjectHandler.ServeHTTP(w, r)
+		case ManageServiceIndexStorageRootProcedure:
+			manageServiceIndexStorageRootHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -133,10 +135,10 @@ func NewManageServiceHandler(svc ManageServiceHandler, opts ...connect_go.Handle
 // UnimplementedManageServiceHandler returns CodeUnimplemented from all methods.
 type UnimplementedManageServiceHandler struct{}
 
-func (UnimplementedManageServiceHandler) StreamObjectRoots(context.Context, *connect_go.Request[v1.StreamObjectRootsRequest], *connect_go.ServerStream[v1.StreamObjectRootsResponse]) error {
-	return connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.ManageService.StreamObjectRoots is not implemented"))
+func (UnimplementedManageServiceHandler) IndexObject(context.Context, *connect_go.Request[v1.IndexObjectRequest]) (*connect_go.Response[v1.IndexObjectResponse], error) {
+	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.ManageService.IndexObject is not implemented"))
 }
 
-func (UnimplementedManageServiceHandler) SyncObject(context.Context, *connect_go.Request[v1.SyncObjectRequest]) (*connect_go.Response[v1.SyncObjectResponse], error) {
-	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.ManageService.SyncObject is not implemented"))
+func (UnimplementedManageServiceHandler) IndexStorageRoot(context.Context, *connect_go.Request[v1.IndexStorageRootRequest]) (*connect_go.Response[v1.IndexStorageRootResponse], error) {
+	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.ManageService.IndexStorageRoot is not implemented"))
 }

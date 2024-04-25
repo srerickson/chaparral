@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/srerickson/chaparral"
 	sqlite "github.com/srerickson/chaparral/server/chapdb/sqlite_gen"
@@ -182,11 +183,12 @@ func (sqdb *SQLiteDB) SetObjectManifest(ctx context.Context, obj *chaparral.Obje
 	}()
 	qry := sqlite.New(sqdb.sqlDB()).WithTx(tx)
 	dbObj, err := qry.CreateObject(ctx, sqlite.CreateObjectParams{
-		StoreID: obj.StorageRootID,
-		OcflID:  obj.ID,
-		Path:    obj.Path,
-		Spec:    obj.Spec,
-		Alg:     obj.DigestAlgorithm,
+		StoreID:   obj.StorageRootID,
+		OcflID:    obj.ID,
+		Path:      obj.Path,
+		Spec:      obj.Spec,
+		Alg:       obj.DigestAlgorithm,
+		IndexedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		return
@@ -279,6 +281,37 @@ func (db *SQLiteDB) DeleteObject(ctx context.Context, storeID, objectID string) 
 		StoreID: storeID,
 		OcflID:  objectID,
 	})
+	if err != nil {
+		return
+	}
+	err = tx.Commit()
+	return
+}
+
+func (db *SQLiteDB) DeleteStaleObjects(ctx context.Context, storeID string, olderThan time.Time) (err error) {
+	olderThan = olderThan.UTC()
+	var tx *sql.Tx
+	tx, err = db.sqlDB().BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		if rbErr := tx.Rollback(); rbErr != nil {
+			err = errors.Join(err, rbErr)
+		}
+	}()
+	qry := sqlite.New(db.sqlDB()).WithTx(tx)
+	err = qry.DeleteStaleObjects(ctx, sqlite.DeleteStaleObjectsParams{
+		StoreID:   storeID,
+		IndexedAt: olderThan,
+	})
+	if err != nil {
+		return
+	}
+	err = qry.DeleteOrphanedObjectContents(ctx)
 	if err != nil {
 		return
 	}

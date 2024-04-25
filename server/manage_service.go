@@ -5,13 +5,10 @@ import (
 	"errors"
 	"net/http"
 
-	"strings"
-
 	"github.com/bufbuild/connect-go"
 	chaparralv1 "github.com/srerickson/chaparral/gen/chaparral/v1"
 	"github.com/srerickson/chaparral/gen/chaparral/v1/chaparralv1connect"
 	"github.com/srerickson/chaparral/server/store"
-	"github.com/srerickson/ocfl-go"
 )
 
 type ManageService struct {
@@ -27,9 +24,9 @@ func (srv *ManageService) Handler() (string, http.Handler) {
 	return chaparralv1connect.NewManageServiceHandler(srv)
 }
 
-func (srv *ManageService) SyncObject(ctx context.Context,
-	req *connect.Request[chaparralv1.SyncObjectRequest],
-) (*connect.Response[chaparralv1.SyncObjectResponse], error) {
+func (srv *ManageService) IndexObject(ctx context.Context,
+	req *connect.Request[chaparralv1.IndexObjectRequest],
+) (*connect.Response[chaparralv1.IndexObjectResponse], error) {
 	if !srv.Allowed(ctx, ActionAdminister, req.Msg.StorageRootId) {
 		err := errors.New("you don't have permssion to manage the storage root")
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
@@ -38,39 +35,21 @@ func (srv *ManageService) SyncObject(ctx context.Context,
 	if err != nil {
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
-
 	// store.GetObjectManifest(y)
-
 	return nil, errors.New("not implemented")
 }
 
-func (srv *ManageService) StreamObjectRoots(ctx context.Context,
-	req *connect.Request[chaparralv1.StreamObjectRootsRequest],
-	stream *connect.ServerStream[chaparralv1.StreamObjectRootsResponse],
-) error {
+func (srv *ManageService) IndexStorageRoot(ctx context.Context,
+	req *connect.Request[chaparralv1.IndexStorageRootRequest],
+) (*connect.Response[chaparralv1.IndexStorageRootResponse], error) {
+	if !srv.Allowed(ctx, ActionAdminister, req.Msg.StorageRootId) {
+		err := errors.New("you don't have permssion to manage the storage root")
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
 	store, err := srv.StorageRoot(req.Msg.StorageRootId)
 	if err != nil {
-		return connect.NewError(connect.CodeNotFound, err)
+		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
-	if !srv.Allowed(ctx, ActionAdminister, store.ID()) {
-		err := errors.New("you don't have permssion to manage the storage root")
-		return connect.NewError(connect.CodePermissionDenied, err)
-	}
-	each := func(obj *ocfl.ObjectRoot) error {
-		// use object path relative to storage root
-		var objPath = obj.Path
-		if store.Path() != "." {
-			objPath = strings.TrimPrefix(objPath, store.Path()+"/")
-		}
-		return stream.Send(&chaparralv1.StreamObjectRootsResponse{
-			ObjectPath:      objPath,
-			Spec:            string(obj.Spec),
-			DigestAlgorithm: obj.SidecarAlg,
-		})
-	}
-	err = ocfl.ObjectRoots(ctx, store.FS(), ocfl.Dir(store.Path()), each)
-	if err != nil {
-		return connect.NewError(connect.CodeInternal, err)
-	}
-	return nil
+	go store.Reindex(context.WithoutCancel(ctx))
+	return &connect.Response[chaparralv1.IndexStorageRootResponse]{}, nil
 }
