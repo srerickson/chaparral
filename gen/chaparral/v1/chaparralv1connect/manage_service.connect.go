@@ -36,6 +36,9 @@ const (
 	// ManageServiceStreamObjectRootsProcedure is the fully-qualified name of the ManageService's
 	// StreamObjectRoots RPC.
 	ManageServiceStreamObjectRootsProcedure = "/chaparral.v1.ManageService/StreamObjectRoots"
+	// ManageServiceSyncObjectProcedure is the fully-qualified name of the ManageService's SyncObject
+	// RPC.
+	ManageServiceSyncObjectProcedure = "/chaparral.v1.ManageService/SyncObject"
 )
 
 // ManageServiceClient is a client for the chaparral.v1.ManageService service.
@@ -43,6 +46,10 @@ type ManageServiceClient interface {
 	// StreamObjectRoots scans an OCFL storage root and returns a stream
 	// of OCFL oobject root details to the caller.
 	StreamObjectRoots(context.Context, *connect_go.Request[v1.StreamObjectRootsRequest]) (*connect_go.ServerStreamForClient[v1.StreamObjectRootsResponse], error)
+	// SyncObject updates chaparral's internal metadata index to reflect the
+	// actual state of an OCFL object. If the object is not found, any
+	// references to object in the index is removed.
+	SyncObject(context.Context, *connect_go.Request[v1.SyncObjectRequest]) (*connect_go.Response[v1.SyncObjectResponse], error)
 }
 
 // NewManageServiceClient constructs a client for the chaparral.v1.ManageService service. By
@@ -60,12 +67,18 @@ func NewManageServiceClient(httpClient connect_go.HTTPClient, baseURL string, op
 			baseURL+ManageServiceStreamObjectRootsProcedure,
 			opts...,
 		),
+		syncObject: connect_go.NewClient[v1.SyncObjectRequest, v1.SyncObjectResponse](
+			httpClient,
+			baseURL+ManageServiceSyncObjectProcedure,
+			opts...,
+		),
 	}
 }
 
 // manageServiceClient implements ManageServiceClient.
 type manageServiceClient struct {
 	streamObjectRoots *connect_go.Client[v1.StreamObjectRootsRequest, v1.StreamObjectRootsResponse]
+	syncObject        *connect_go.Client[v1.SyncObjectRequest, v1.SyncObjectResponse]
 }
 
 // StreamObjectRoots calls chaparral.v1.ManageService.StreamObjectRoots.
@@ -73,11 +86,20 @@ func (c *manageServiceClient) StreamObjectRoots(ctx context.Context, req *connec
 	return c.streamObjectRoots.CallServerStream(ctx, req)
 }
 
+// SyncObject calls chaparral.v1.ManageService.SyncObject.
+func (c *manageServiceClient) SyncObject(ctx context.Context, req *connect_go.Request[v1.SyncObjectRequest]) (*connect_go.Response[v1.SyncObjectResponse], error) {
+	return c.syncObject.CallUnary(ctx, req)
+}
+
 // ManageServiceHandler is an implementation of the chaparral.v1.ManageService service.
 type ManageServiceHandler interface {
 	// StreamObjectRoots scans an OCFL storage root and returns a stream
 	// of OCFL oobject root details to the caller.
 	StreamObjectRoots(context.Context, *connect_go.Request[v1.StreamObjectRootsRequest], *connect_go.ServerStream[v1.StreamObjectRootsResponse]) error
+	// SyncObject updates chaparral's internal metadata index to reflect the
+	// actual state of an OCFL object. If the object is not found, any
+	// references to object in the index is removed.
+	SyncObject(context.Context, *connect_go.Request[v1.SyncObjectRequest]) (*connect_go.Response[v1.SyncObjectResponse], error)
 }
 
 // NewManageServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -91,10 +113,17 @@ func NewManageServiceHandler(svc ManageServiceHandler, opts ...connect_go.Handle
 		svc.StreamObjectRoots,
 		opts...,
 	)
+	manageServiceSyncObjectHandler := connect_go.NewUnaryHandler(
+		ManageServiceSyncObjectProcedure,
+		svc.SyncObject,
+		opts...,
+	)
 	return "/chaparral.v1.ManageService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ManageServiceStreamObjectRootsProcedure:
 			manageServiceStreamObjectRootsHandler.ServeHTTP(w, r)
+		case ManageServiceSyncObjectProcedure:
+			manageServiceSyncObjectHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -106,4 +135,8 @@ type UnimplementedManageServiceHandler struct{}
 
 func (UnimplementedManageServiceHandler) StreamObjectRoots(context.Context, *connect_go.Request[v1.StreamObjectRootsRequest], *connect_go.ServerStream[v1.StreamObjectRootsResponse]) error {
 	return connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.ManageService.StreamObjectRoots is not implemented"))
+}
+
+func (UnimplementedManageServiceHandler) SyncObject(context.Context, *connect_go.Request[v1.SyncObjectRequest]) (*connect_go.Response[v1.SyncObjectResponse], error) {
+	return nil, connect_go.NewError(connect_go.CodeUnimplemented, errors.New("chaparral.v1.ManageService.SyncObject is not implemented"))
 }

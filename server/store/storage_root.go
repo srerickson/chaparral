@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"slices"
 	"sort"
@@ -35,8 +36,10 @@ type StorageRoot struct {
 
 	cache ObjectCache
 
-	syncing   map[string]chan struct{}
-	syncingMx sync.Mutex
+	// map of object ids to channels that are open
+	// if
+	syncWaitGroups   map[string]*sync.WaitGroup
+	syncWaitGroupsMx sync.Mutex
 }
 
 type ObjectCache interface {
@@ -54,13 +57,13 @@ type StorageRootInitializer struct {
 
 func NewStorageRoot(id string, fsys ocfl.WriteFS, path string, init *StorageRootInitializer, cache ObjectCache) *StorageRoot {
 	return &StorageRoot{
-		id:      id,
-		fs:      fsys,
-		path:    path,
-		init:    init,
-		locker:  lock.NewLocker(),
-		syncing: map[string]chan struct{}{},
-		cache:   cache,
+		id:             id,
+		fs:             fsys,
+		path:           path,
+		init:           init,
+		locker:         lock.NewLocker(),
+		syncWaitGroups: map[string]*sync.WaitGroup{},
+		cache:          cache,
 	}
 }
 
@@ -245,28 +248,67 @@ func (store *StorageRoot) getObjectManifest(ctx context.Context, objectID string
 	if err == nil {
 		return man, nil
 	}
-	if err := store.syncObject(ctx, objectID); err != nil {
+	pth, err := store.base.ResolveID(objectID)
+	if err != nil {
+		return nil, err
+	}
+	if err := store.syncObjectByPath(ctx, pth); err != nil {
 		return nil, err
 	}
 	return store.cache.GetObjectManifest(ctx, store.id, objectID)
 }
 
-func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error {
-	done, syncing := store.getObjectSync(objectID)
-	if syncing {
-		<-done // wait for result from a current request
+func (store *StorageRoot) SyncObject(ctx context.Context, objectID string) error {
+	if err := store.Ready(ctx); err != nil {
+		return err
+	}
+	objPath, err := store.base.ResolveID(objectID)
+	if err != nil {
+		return err
+	}
+	return store.syncObjectByPath(ctx, objPath)
+}
+
+func (store *StorageRoot) SyncObjectPath(ctx context.Context, objectPath string) error {
+	if err := store.Ready(ctx); err != nil {
+		return err
+	}
+	return store.syncObjectByPath(ctx, objectPath)
+}
+
+func (store *StorageRoot) syncObjectByPath(ctx context.Context, objectPath string) error {
+	getInflight := func(key string) (*sync.WaitGroup, bool) {
+		store.syncWaitGroupsMx.Lock()
+		defer store.syncWaitGroupsMx.Unlock()
+		wg := store.syncWaitGroups[key]
+		if wg != nil {
+			return wg, true
+		}
+		wg = &sync.WaitGroup{}
+		wg.Add(1)
+		store.syncWaitGroups[key] = wg
+		return wg, false
+	}
+	wg, inflight := getInflight(objectPath)
+	if inflight {
+		// wait for an active sync request that has yet to complete
+		wg.Wait()
 		return nil
 	}
-	// there isn't an existing request.
-	// make it and close the wait channel
-	defer func() {
-		store.syncingMx.Lock()
-		delete(store.syncing, objectID)
-		close(done)
-		store.syncingMx.Unlock()
-	}()
-	obj, err := store.base.GetObject(ctx, objectID)
+	// clean up the inflight wg
+	defer func(key string, wg *sync.WaitGroup) {
+		store.syncWaitGroupsMx.Lock()
+		delete(store.syncWaitGroups, key)
+		wg.Done()
+		store.syncWaitGroupsMx.Unlock()
+	}(objectPath, wg)
+	// fetch object state
+	obj, err := store.base.GetObjectPath(ctx, objectPath)
 	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			// objcet doesn't exist
+			store.cache.DeleteObject()
+		}
 		return err
 	}
 	man := &chaparral.ObjectManifest{
@@ -293,17 +335,6 @@ func (store *StorageRoot) syncObject(ctx context.Context, objectID string) error
 	return nil
 }
 
-func (store *StorageRoot) getObjectSync(objectID string) (chan struct{}, bool) {
-	store.syncingMx.Lock()
-	defer store.syncingMx.Unlock()
-	if val, ok := store.syncing[objectID]; ok {
-		return val, true
-	}
-	ch := make(chan struct{})
-	store.syncing[objectID] = ch
-	return ch, false
-}
-
 func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *ocfl.Stage, opts ...ocflv1.CommitOption) error {
 	if err := store.Ready(ctx); err != nil {
 		return err
@@ -320,7 +351,7 @@ func (store *StorageRoot) Commit(ctx context.Context, objectID string, stage *oc
 		}
 		return err
 	}
-	if err := store.syncObject(ctx, objectID); err != nil {
+	if err := store.syncObjectByPath(ctx, objectID); err != nil {
 		return fmt.Errorf("while syncing object, post-commit: %w", err)
 	}
 	return nil

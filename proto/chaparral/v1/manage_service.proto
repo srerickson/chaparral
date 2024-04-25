@@ -8,6 +8,11 @@ service ManageService {
   // StreamObjectRoots scans an OCFL storage root and returns a stream
   // of OCFL oobject root details to the caller.
   rpc StreamObjectRoots(StreamObjectRootsRequest) returns (stream StreamObjectRootsResponse) {}
+  
+  // SyncObject updates chaparral's internal metadata index to reflect the
+  // actual state of an OCFL object. If the object is not found, any
+  // references to object in the index is removed.
+  rpc SyncObject(SyncObjectRequest) returns (SyncObjectResponse) {}
 }
 
 // StreamObjectRootsRequest is used to scan an OCFL storage root for objects.
@@ -25,3 +30,19 @@ message StreamObjectRootsResponse {
   // The digest algorithm used for inventory sidecar
   string digest_algorithm = 3;
 }
+
+// SyncObjectRequest is a request to update chapparal's internal
+// metadata index for a given object
+message SyncObjectRequest {
+  // the storage root for the object to sync
+  string storage_root_id = 1;
+  // the object_id for the objec to sync. (Conflicts with object_path. If both
+  // are set, object_id is used.)
+  string object_id = 2;
+  // the object_path for the object to sync. (Conflicts with object_id. If both
+  // are set, object_id is used.)
+  string object_path = 3;
+}
+
+// SyncObjectResponse is a response from the SyncObject rpc.
+message SyncObjectResponse {}

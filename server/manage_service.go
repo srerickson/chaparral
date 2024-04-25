@@ -27,6 +27,23 @@ func (srv *ManageService) Handler() (string, http.Handler) {
 	return chaparralv1connect.NewManageServiceHandler(srv)
 }
 
+func (srv *ManageService) SyncObject(ctx context.Context,
+	req *connect.Request[chaparralv1.SyncObjectRequest],
+) (*connect.Response[chaparralv1.SyncObjectResponse], error) {
+	if !srv.Allowed(ctx, ActionAdminister, req.Msg.StorageRootId) {
+		err := errors.New("you don't have permssion to manage the storage root")
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+	_, err := srv.StorageRoot(req.Msg.StorageRootId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	// store.GetObjectManifest(y)
+
+	return nil, errors.New("not implemented")
+}
+
 func (srv *ManageService) StreamObjectRoots(ctx context.Context,
 	req *connect.Request[chaparralv1.StreamObjectRootsRequest],
 	stream *connect.ServerStream[chaparralv1.StreamObjectRootsResponse],
